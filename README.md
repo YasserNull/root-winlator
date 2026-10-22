@@ -34,8 +34,7 @@ Better performance: removing the PRoot layer eliminates `ptrace` syscall interce
 - Changed the app theme to red
 - Removed PRoot and replaced it with `chroot` and `mount`
 - Added runtime download of BusyBox to provide `chroot` and `mount`
-- Added a chroot section with three new options in the container settings:
-  - **Fix SUID on `/data`**: fixes user switching issues, such as switching users with `su`
+- Added a chroot section with two new options in the container settings:
   - **Bind RAM directories (tmpfs)**: mounts `tmpfs` on `/tmp` and `/dev/shm`
   - **Bind Android directories**: bind-mounts Android directories such as `/storage` and `/data` into the container
 

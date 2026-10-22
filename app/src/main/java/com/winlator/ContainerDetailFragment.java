@@ -169,10 +169,8 @@ public class ContainerDetailFragment extends Fragment {
         final Spinner sBox64Preset = view.findViewById(R.id.SBox64Preset);
         Box64PresetManager.loadSpinner(sBox64Preset, isEditMode() ? container.getBox64Preset() : preferences.getString("box64_preset", Box64Preset.DEFAULT));
 
-        final CheckBox cbFixSuid = view.findViewById(R.id.CBCFixSuid);
         final CheckBox cbBindRam = view.findViewById(R.id.CBCBindRam);
         final CheckBox cbBindAndroid = view.findViewById(R.id.CBCBindAndroid);
-        cbFixSuid.setChecked(!isEditMode() || !container.getExtra("chrootFixSuid", "1").equals("0"));
         cbBindRam.setChecked(!isEditMode() || !container.getExtra("chrootBindRam", "1").equals("0"));
         cbBindAndroid.setChecked(!isEditMode() || !container.getExtra("chrootBindAndroid", "1").equals("0"));
 
@@ -236,7 +234,6 @@ public class ContainerDetailFragment extends Fragment {
                     container.setStartupSelection(startupSelection);
                     container.setBox64Preset(box64Preset);
                     container.setDesktopTheme(desktopTheme);
-                    container.putExtra("chrootFixSuid", cbFixSuid.isChecked() ? "1" : "0");
                     container.putExtra("chrootBindRam", cbBindRam.isChecked() ? "1" : "0");
                     container.putExtra("chrootBindAndroid", cbBindAndroid.isChecked() ? "1" : "0");
                     container.saveData();
@@ -269,7 +266,6 @@ public class ContainerDetailFragment extends Fragment {
                     data.put("desktopTheme", desktopTheme);
 
                     JSONObject chrootData = new JSONObject();
-                    chrootData.put("chrootFixSuid", cbFixSuid.isChecked() ? "1" : "0");
                     chrootData.put("chrootBindRam", cbBindRam.isChecked() ? "1" : "0");
                     chrootData.put("chrootBindAndroid", cbBindAndroid.isChecked() ? "1" : "0");
                     data.put("extraData", chrootData);

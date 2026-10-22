@@ -9,7 +9,6 @@ import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.net.Uri;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.MenuItem;
 
 import androidx.annotation.IntRange;
@@ -31,8 +30,6 @@ import com.winlator.core.AppUtils;
 import com.winlator.core.Callback;
 import com.winlator.core.LocaleHelper;
 import com.winlator.core.PreloaderDialog;
-import com.winlator.root.RootBootstrap;
-import com.winlator.xenvironment.RootFS;
 import com.winlator.xenvironment.RootFSInstaller;
 
 public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
@@ -82,7 +79,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             actionBar.setHomeAsUpIndicator(R.drawable.icon_action_bar_menu);
             onNavigationItemSelected(navigationView.getMenu().findItem(menuItemId));
             navigationView.setCheckedItem(menuItemId);
-            if (!requestAppPermissions()) installRootFS();
+            if (!requestAppPermissions()) RootFSInstaller.installIfNeeded(this);
 
             int containerId = intent.getIntExtra("container_id", 0);
             String startPath = intent.getStringExtra("start_path");
@@ -102,7 +99,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == PERMISSION_WRITE_EXTERNAL_STORAGE_REQUEST_CODE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                installRootFS();
+                RootFSInstaller.installIfNeeded(this);
             }
             else finish();
         }
@@ -145,22 +142,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     public void setOpenFileCallback(Callback<Uri> openFileCallback) {
         this.openFileCallback = openFileCallback;
-    }
-
-    private void installRootFS() {
-        Log.i("RootWinlator", "installRootFS: requesting root/bootstrap");
-        RootBootstrap.prepare(this, (success) -> {
-            Log.i("RootWinlator", "installRootFS: bootstrap success="+success+
-                " chrootSupported="+RootBootstrap.isChrootSupported());
-            if (success) {
-                if (!RootBootstrap.isChrootSupported())
-                    AppUtils.showToast(this, R.string.root_chroot_unavailable);
-                boolean valid = RootFS.find(this).isValid();
-                Log.i("RootWinlator", "installRootFS: rootfsValidBeforeInstall="+valid);
-                RootFSInstaller.installIfNeeded(this);
-            }
-            else AppUtils.showToast(this, R.string.root_required);
-        });
     }
 
     private boolean requestAppPermissions() {

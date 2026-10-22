@@ -16,6 +16,8 @@ import com.winlator.core.FileUtils;
 import com.winlator.core.PreloaderDialog;
 import com.winlator.core.TarCompressorUtils;
 import com.winlator.core.WineInfo;
+import com.winlator.root.BusyboxInstaller;
+import com.winlator.root.ChrootManager;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -75,6 +77,24 @@ public abstract class RootFSInstaller {
         dialog.show(R.string.installing_system_files);
         Log.i("RootWinlator", "RootFSInstaller: start rootDir="+rootDir+" latest="+LATEST_VERSION);
         Executors.newSingleThreadExecutor().execute(() -> {
+            // The install path may run before the root bootstrap, so make sure
+            // the chroot helper and busybox exist before calling prepare().
+            if (!BusyboxInstaller.ensure(activity)) {
+                Log.e("RootWinlator", "RootFSInstaller: cannot install chroot helper");
+                AppUtils.showToast(activity, R.string.unable_to_install_system_files);
+                dialog.closeOnUiThread();
+                installing = false;
+                return;
+            }
+            // Never delete a rootfs that is still mounted: the bind mounts
+            // point at host directories and rm would follow them.
+            if (!ChrootManager.prepare(activity)) {
+                Log.e("RootWinlator", "RootFSInstaller: cannot unmount/verify before clearing rootfs");
+                AppUtils.showToast(activity, R.string.unable_to_install_system_files);
+                dialog.closeOnUiThread();
+                installing = false;
+                return;
+            }
             clearRootDir(rootDir);
             final long contentLength = TarCompressorUtils.getContentLength(TarCompressorUtils.Type.ZSTD, activity, FILENAME, rootDir);
             AtomicLong totalSizeRef = new AtomicLong();

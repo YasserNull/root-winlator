@@ -2,8 +2,8 @@
 # root-winlator chroot helper.
 #
 # Usage:
-#   chroot-run.sh mount <rootfs> <busybox> <fix_suid> <bind_ram> <bind_android> <uid> <gid> <state_dir>
-#   chroot-run.sh run   <rootfs> <busybox> <app_pid> <env_b64> <cmd_b64> <uid> <gid> <state_dir> <fix_suid> <bind_ram> <bind_android>
+#   chroot-run.sh mount <rootfs> <busybox> <bind_ram> <bind_android> <uid> <gid> <state_dir>
+#   chroot-run.sh run   <rootfs> <busybox> <app_pid> <env_b64> <cmd_b64> <uid> <gid> <state_dir> <bind_ram> <bind_android>
 #   chroot-run.sh stop  <rootfs> <busybox> <uid> <gid> <state_dir>
 #
 # All files except the rootfs itself live in the app-private state dir, which
@@ -24,7 +24,6 @@ log() { echo "root-winlator: $*"; /system/bin/log -t RootWinlator "$*" 2>/dev/nu
 U=""
 G=""
 STATE_DIR=""
-FIX_SUID=1
 BIND_RAM=1
 BIND_ANDROID=1
 APP_PID=0
@@ -34,13 +33,13 @@ CHILD_PID=""
 
 case "$ACTION" in
     mount)
-        FIX_SUID="$4"; BIND_RAM="$5"; BIND_ANDROID="$6"
-        U="$7"; G="$8"; STATE_DIR="$9"
+        BIND_RAM="$4"; BIND_ANDROID="$5"
+        U="$6"; G="$7"; STATE_DIR="$8"
         ;;
     run)
         APP_PID="$4"; ENV_B64="$5"; CMD_B64="$6"
         U="$7"; G="$8"; STATE_DIR="$9"
-        FIX_SUID="${10:-1}"; BIND_RAM="${11:-1}"; BIND_ANDROID="${12:-1}"
+        BIND_RAM="${10:-1}"; BIND_ANDROID="${11:-1}"
         ;;
     stop)
         U="$4"; G="$5"; STATE_DIR="$6"
@@ -52,10 +51,64 @@ esac
 
 [ -n "$U" ] && [ -n "$G" ] && [ -n "$STATE_DIR" ] || exit 66
 bb mkdir -p "$STATE_DIR"
-log "action=$ACTION rootfs=$ROOTFS uid=$U gid=$G state=$STATE_DIR fix=$FIX_SUID ram=$BIND_RAM android=$BIND_ANDROID appPid=$APP_PID"
+log "action=$ACTION rootfs=$ROOTFS uid=$U gid=$G state=$STATE_DIR ram=$BIND_RAM android=$BIND_ANDROID appPid=$APP_PID"
 STOP_FILE="$STATE_DIR/chroot.stop"
 
-is_mounted() { bb mountpoint -q "$1" 2>/dev/null; }
+NL='
+'
+
+# The rootfs path must be canonical: the kernel reports and resolves mount
+# points by their real path, so a symlinked component would never match.
+R=$(bb readlink -f "$ROOTFS" 2>/dev/null)
+[ -n "$R" ] && ROOTFS="$R"
+
+# /proc/mounts cannot be trusted on every device: root-hiding kernels
+# (KernelSU + SUSFS sus_mount, Shamiko, ...) filter mount entries even for
+# root, so a successful mount(2) may never be listed there. Every check below
+# also falls back to stat(2), which cannot be hidden. Without this, mounts
+# looked "missing", were stacked again on every start (the second tmpfs on
+# /tmp hid the X11 sockets created in between) and were never unmounted.
+listed_mounts() {
+    {
+        bb awk '{print $2}' /proc/mounts 2>/dev/null
+        bb awk '{print $5}' /proc/self/mountinfo 2>/dev/null
+    } | bb awk -v r="$ROOTFS" '$0==r || index($0, r "/")==1' | bb sort -u
+}
+
+dev_ino() { bb stat -L -c '%d:%i' "$1" 2>/dev/null; }
+
+# A directory on another device than its parent is a mount point
+# (busybox mountpoint compares st_dev, it does not read /proc/mounts).
+is_mounted() {
+    case "$NL$(listed_mounts)$NL" in
+        *"$NL$1$NL"*) return 0 ;;
+    esac
+    [ -d "$1" ] && [ ! -L "$1" ] && bb mountpoint -q "$1" 2>/dev/null
+}
+
+# Bind mounts from the same filesystem do not change st_dev, so compare the
+# device and inode of the source and the target instead.
+is_bound() {
+    a=$(dev_ino "$1")
+    [ -n "$a" ] && [ "$a" = "$(dev_ino "$2")" ] && return 0
+    is_mounted "$2"
+}
+
+# True if no component of $1 below the rootfs is a symlink. Shell builtins
+# only: called for every candidate mount point during cleanup.
+no_symlink_below_rootfs() {
+    rest=${1#"$ROOTFS"}
+    cur="$ROOTFS"
+    while [ -n "$rest" ]; do
+        rest=${rest#/}
+        comp=${rest%%/*}
+        rest=${rest#"$comp"}
+        [ -n "$comp" ] || continue
+        cur="$cur/$comp"
+        [ -L "$cur" ] && return 1
+    done
+    return 0
+}
 
 # Mount targets must be real directories. A guest-created symlink here would
 # make mount(2) act on the symlink target in the host filesystem.
@@ -68,12 +121,21 @@ safe_dir() {
     fi
 }
 
+# mount_fs <rel_path> <mount args...>: idempotent, verified mount.
+mount_fs() {
+    dst="$ROOTFS$1"
+    shift
+    safe_dir "$dst"
+    is_mounted "$dst" && return 0
+    err=$(bb mount "$@" "$dst" 2>&1)
+    is_mounted "$dst" && return 0
+    log "mount: $dst failed: ${err:-not visible}"
+    return 1
+}
+
 mount_tmpfs() {
     dst="$ROOTFS$1"
-    safe_dir "$dst"
-    if ! is_mounted "$dst"; then
-        bb mount -t tmpfs -o mode=1777 tmpfs "$dst" 2>/dev/null || return 1
-    fi
+    mount_fs "$1" -t tmpfs -o mode=1777 tmpfs || return 1
     bb chmod 1777 "$dst" 2>/dev/null
     bb chown "$U:$G" "$dst" 2>/dev/null
     return 0
@@ -84,64 +146,74 @@ bind_path() {
     dst="$ROOTFS$1"
     [ -e "$src" ] || return 0
     safe_dir "$dst"
-    is_mounted "$dst" && return 0
-    # Android mounts /apex/* and several /system and /dev subtrees separately.
-    # A plain bind hides those submounts, so the guest linker
-    # (/system/bin/linker64 -> /apex/...) would disappear.
-    bb mount -o rbind "$src" "$dst" 2>/dev/null || \
-        bb mount -o bind "$src" "$dst" 2>/dev/null || log "cannot bind $src"
+    is_bound "$src" "$dst" && return 0
+    # rbind keeps Android submounts (/apex/*, /mnt/*, /storage/*) visible.
+    err=$(bb mount -o rbind "$src" "$dst" 2>&1)
+    if [ $? -ne 0 ]; then
+        err=$(bb mount -o bind "$src" "$dst" 2>&1)
+        if [ $? -ne 0 ]; then
+            log "mount: cannot bind $src -> $dst: $err"
+            return 1
+        fi
+    fi
+    if ! is_bound "$src" "$dst"; then
+        log "mount: bind not visible $dst"
+        return 1
+    fi
+    return 0
 }
 
-fix_suid_options() {
-    opts=$(bb awk '$2=="/data"{print $4; exit}' /proc/mounts 2>/dev/null)
-    [ -n "$opts" ] || return 0
-    if [ "$FIX_SUID" = "1" ]; then
-        case ",$opts," in
-            *",nosuid,"*)
-                bb mount -o remount,dev,suid /data 2>/dev/null || log "cannot enable suid on /data"
+android_bind_points() {
+    # Same list generation as chroot-distro: /sdcard, each /storage entry,
+    # then every top-level Android directory except the Linux rootfs/host-only
+    # ones. /data is excluded on purpose: the rootfs lives inside it, so
+    # exposing /data would both recurse and hand app-private files to the guest.
+    # /data_mirror is excluded for the same reason (it re-exposes /data), and
+    # /dev, /proc and /sys are mounted separately by do_mount.
+    bb echo /sdcard
+    for p in /storage/*; do
+        [ -e "$p" ] || continue
+        bb echo "$p"
+    done
+    for p in /*; do
+        [ -d "$p" ] || continue
+        case "$p" in
+            /storage|/bin|/boot|/etc|/home|/lib|/media|/opt|/root|/run|/sbin|/srv|/usr|/var|/linkerconfig|/data|/data_mirror|/dev|/proc|/sys)
+                continue
                 ;;
         esac
-    else
-        case ",$opts," in
-            *",nosuid,"*) ;;
-            *)
-                bb mount -o remount,nosuid,nodev /data 2>/dev/null || log "cannot disable suid on /data"
-                ;;
-        esac
-    fi
+        bb echo "$p"
+    done
 }
 
 do_mount() {
     [ -d "$ROOTFS" ] || { log "missing rootfs: $ROOTFS"; return 1; }
     log "mount: begin"
+    log "mount: uid=$(bb id -u 2>/dev/null) ctx=$(bb cat /proc/self/attr/current 2>/dev/null) caps=$(bb awk '/CapEff/{print $2}' /proc/self/status 2>/dev/null) listed=$(listed_mounts | bb wc -l)"
+    ok=1
 
-    safe_dir "$ROOTFS/dev"
-    is_mounted "$ROOTFS/dev" || bb mount -o bind /dev "$ROOTFS/dev" 2>/dev/null
-
-    safe_dir "$ROOTFS/proc"
-    is_mounted "$ROOTFS/proc" || bb mount -t proc proc "$ROOTFS/proc" 2>/dev/null
-
-    safe_dir "$ROOTFS/sys"
-    is_mounted "$ROOTFS/sys" || bb mount -o bind /sys "$ROOTFS/sys" 2>/dev/null
-
-    safe_dir "$ROOTFS/dev/pts"
-    is_mounted "$ROOTFS/dev/pts" || bb mount -t devpts devpts "$ROOTFS/dev/pts" 2>/dev/null
+    mount_fs /dev -o bind /dev || ok=0
+    mount_fs /proc -t proc proc || ok=0
+    mount_fs /sys -o bind /sys || ok=0
+    mount_fs /dev/pts -t devpts devpts || ok=0
 
     if [ "$BIND_RAM" = "1" ]; then
         for p in /tmp /run /var/tmp /dev/shm; do
-            mount_tmpfs "$p" || log "cannot mount tmpfs on $p"
+            mount_tmpfs "$p" || ok=0
         done
     fi
 
     if [ "$BIND_ANDROID" = "1" ]; then
-        # /data is intentionally not bind-mounted: the rootfs lives in
-        # /data/local/tmp, so binding /data would create a recursive mount.
-        for p in /sdcard /storage /mnt /system /vendor /product /odm /apex /linkerconfig; do
-            bind_path "$p"
+        points=$(android_bind_points | bb sort -u)
+        for p in $points; do
+            bind_path "$p" || ok=0
         done
     fi
 
-    fix_suid_options
+    if [ "$ok" -ne 1 ]; then
+        log "mount: incomplete"
+        return 1
+    fi
     log "mount: done"
     return 0
 }
@@ -173,12 +245,8 @@ restore_home_owner() {
     log "cleanup: home owner -> $U:$G"
 }
 
-cleanup() {
-    [ -d "$ROOTFS" ] || return 0
-    log "cleanup: begin"
-
-    # Never kill the su/helper ancestor chain: ProcessHelper may start su with
-    # the rootfs as cwd, which would otherwise match the cwd scan below.
+build_skip_pids() {
+    # Never kill the su/helper ancestor chain.
     SKIP_PIDS=" $$ "
     p=$$
     while [ "$p" -gt 1 ] 2>/dev/null; do
@@ -188,7 +256,176 @@ cleanup() {
         esac
         SKIP_PIDS="$SKIP_PIDS$p "
     done
+}
 
+kill_pid() {
+    case "$SKIP_PIDS" in
+        *" $1 "*) return 0 ;;
+    esac
+    case "$1" in
+        ''|*[!0-9]*) return 0 ;;
+    esac
+    [ "$1" -gt 1 ] 2>/dev/null && bb kill -9 "$1" 2>/dev/null
+}
+
+stop_guest_processes() {
+    # Narrow candidates with one ps call, then verify root/cwd.
+    candidates=$(bb ps -o pid,user,args 2>/dev/null | bb awk '
+        NR > 1 && ($0 ~ /(^|[\/ ])(box64|wineserver|wine64|wine|wineboot|winhandler|explorer)([ ]|$)/ ||
+                    $0 ~ /\.exe([ ]|$)/) { print $1 }')
+    for pid in $candidates; do
+        proc="/proc/$pid"
+        r=$(bb readlink "$proc/root" 2>/dev/null)
+        case "$r" in
+            "$ROOTFS"|"$ROOTFS"/*) kill_pid "$pid"; continue ;;
+        esac
+        c=$(bb readlink "$proc/cwd" 2>/dev/null)
+        case "$c" in
+            "$ROOTFS"|"$ROOTFS"/*) kill_pid "$pid" ;;
+        esac
+    done
+}
+
+kill_processes_with_open_files() {
+    # chroot-distro force mode: close every process that still references the
+    # rootfs, not only wine/box64. This is what lets the following umount(2)
+    # succeed without lazy unmounts.
+    for proc in /proc/[0-9]*; do
+        [ -d "$proc" ] || continue
+        pid=${proc#/proc/}
+        case "$SKIP_PIDS" in
+            *" $pid "*) continue ;;
+        esac
+        hit=0
+        for link in root cwd exe; do
+            t=$(bb readlink "$proc/$link" 2>/dev/null)
+            case "$t" in
+                "$ROOTFS"|"$ROOTFS"/*) hit=1; break ;;
+            esac
+        done
+        if [ "$hit" = "0" ]; then
+            for fd in "$proc"/fd/*; do
+                [ -e "$fd" ] || [ -L "$fd" ] || continue
+                t=$(bb readlink "$fd" 2>/dev/null)
+                case "$t" in
+                    "$ROOTFS"|"$ROOTFS"/*) hit=1; break ;;
+                esac
+            done
+        fi
+        [ "$hit" = "1" ] && kill_pid "$pid"
+    done
+}
+
+unmount_loopbacks() {
+    loops=$(bb losetup -a 2>/dev/null | bb grep -F "$ROOTFS" | bb awk -F: '{print $1}')
+    for dev in $loops; do
+        bb umount "$dev" 2>/dev/null || bb umount -f "$dev" 2>/dev/null
+    done
+}
+
+known_mount_points() {
+    # Every path this helper ever mounts. They are probed with stat(2) because
+    # /proc/mounts may hide them. /data_mirror: mounted by older builds.
+    for p in /dev /dev/pts /dev/shm /proc /sys /tmp /run /var/tmp /data_mirror; do
+        bb echo "$ROOTFS$p"
+    done
+    for p in $ANDROID_POINTS; do
+        bb echo "$ROOTFS$p"
+    done
+}
+
+# Uses $LISTED (listed_mounts snapshot) and $ANDROID_POINTS.
+mount_active() {
+    m="$1"
+    case "$m" in
+        "$ROOTFS"|"$ROOTFS"/*) ;;
+        *) return 1 ;;
+    esac
+    # Never let a guest-created symlink redirect umount(2) to a host mount.
+    no_symlink_below_rootfs "$m" || return 1
+    [ -d "$m" ] || return 1
+    case "$NL$LISTED$NL" in
+        *"$NL$m$NL"*) return 0 ;;
+    esac
+    bb mountpoint -q "$m" 2>/dev/null && return 0
+    src=${m#"$ROOTFS"}
+    case " $ANDROID_POINTS " in
+        *" $src "*) ;;
+        *) return 1 ;;
+    esac
+    a=$(dev_ino "$src")
+    [ -n "$a" ] && [ "$a" = "$(dev_ino "$m")" ]
+}
+
+# Prints the active mount points below the rootfs, deepest first.
+active_mounts() {
+    [ -n "$ANDROID_POINTS" ] || ANDROID_POINTS=$(android_bind_points | bb tr '\n' ' ')
+    LISTED=$(listed_mounts)
+    for m in $({ bb echo "$LISTED"; known_mount_points; } | bb sort -u -r); do
+        mount_active "$m" && bb echo "$m"
+    done
+}
+
+# unmount_point <path> <allow_lazy>: pops every mount stacked on <path>
+# (broken builds mounted the same path again on each start).
+unmount_point() {
+    n=0
+    while [ "$n" -lt 16 ]; do
+        LISTED=$(listed_mounts)
+        mount_active "$1" || return 0
+        if ! bb umount "$1" 2>/dev/null && ! bb umount -f "$1" 2>/dev/null; then
+            # Kernels that hide mounts also hide rbind submounts, so they
+            # cannot be unmounted one by one; detach the whole tree instead.
+            if [ "$2" = "1" ] && bb umount -l "$1" 2>/dev/null; then
+                log "cleanup: lazy umount $1"
+            else
+                log "cleanup: umount failed $1"
+                return 1
+            fi
+        fi
+        n=$((n + 1))
+    done
+    return 1
+}
+
+force_unmount_all() {
+    # chroot-distro algorithm: kill open files, loop devices, then every mount
+    # point under the rootfs deepest-first, and verify. Lazy umount is only a
+    # last resort, after every process using the rootfs has been killed.
+    log "cleanup: stopping guest processes"
+    stop_guest_processes
+    log "cleanup: killing processes with open rootfs files"
+    kill_processes_with_open_files
+    log "cleanup: unmounting loop devices"
+    bb sleep 1
+    unmount_loopbacks
+
+    pass=0
+    while [ "$pass" -lt 3 ]; do
+        mounts=$(active_mounts)
+        [ -z "$mounts" ] && return 0
+        lazy=0
+        [ "$pass" -ge 1 ] && lazy=1
+        for m in $mounts; do
+            unmount_point "$m" "$lazy"
+        done
+        bb sleep 1
+        [ -z "$(active_mounts)" ] && return 0
+        if [ "$pass" -eq 0 ]; then
+            kill_processes_with_open_files
+            bb sleep 1
+        fi
+        pass=$((pass + 1))
+    done
+
+    [ -z "$(active_mounts)" ]
+}
+
+cleanup() {
+    [ -d "$ROOTFS" ] || return 0
+    log "cleanup: begin"
+    build_skip_pids
+    ANDROID_POINTS=$(android_bind_points | bb tr '\n' ' ')
     : > "$STOP_FILE" 2>/dev/null
 
     # The launcher wrapper is root-owned and not guest-writable. Never read a
@@ -200,51 +437,27 @@ cleanup() {
         esac
     fi
 
-    # Narrow candidates with one ps call: scanning every root process (there
-    # are hundreds) made stop/prepare take ~20s on some devices. The readlink
-    # check below still verifies that the process really lives in the rootfs.
-    candidates=$(bb ps -o pid,user,args 2>/dev/null | bb awk '
-        NR > 1 && ($0 ~ /(^|[\/ ])(box64|wineserver|wine64|wine|wineboot|winhandler|explorer)([ ]|$)/ ||
-                    $0 ~ /\.exe([ ]|$)/) { print $1 }')
-    for pid in $candidates; do
-        case "$SKIP_PIDS" in
-            *" $pid "*) continue ;;
-        esac
-        proc="/proc/$pid"
-        r=$(bb readlink "$proc/root" 2>/dev/null)
-        case "$r" in
-            "$ROOTFS"|"$ROOTFS"/*)
-                bb kill -9 "$pid" 2>/dev/null
-                continue
-                ;;
-        esac
-        c=$(bb readlink "$proc/cwd" 2>/dev/null)
-        case "$c" in
-            "$ROOTFS"|"$ROOTFS"/*) bb kill -9 "$pid" 2>/dev/null ;;
-        esac
-    done
+    # Nothing mounted means there is nothing to unmount. Avoid scanning every
+    # process on the device (slow on some ROMs) during normal app startup.
+    if [ -z "$(active_mounts)" ]; then
+        log "cleanup: no mounts"
+        restore_home_owner
+        return 0
+    fi
 
-    log "cleanup: processes stopped"
-    bb sleep 1
+    if force_unmount_all; then
+        bb sync 2>/dev/null
+        # Leftover from the old privilege dropper.
+        [ ! -L "$ROOTFS/tmp" ] && bb rm -rf "$ROOTFS/tmp/.root-winlator" 2>/dev/null
+        restore_home_owner
+        log "cleanup: done"
+        return 0
+    fi
 
-    # Repeat: each pass unmounts deeper targets first. A lazy unmount is the
-    # final fallback if a file descriptor is still held by a dying process.
-    i=0
-    while [ "$i" -lt 3 ]; do
-        mounts=$(bb awk -v r="$ROOTFS" '$2==r || index($2, r "/")==1 {print $2}' /proc/mounts 2>/dev/null | bb sort -r)
-        [ -z "$mounts" ] && break
-        for m in $mounts; do
-            bb umount "$m" 2>/dev/null || bb umount -l "$m" 2>/dev/null
-        done
-        bb sleep 1
-        i=$((i + 1))
-    done
-
-    # Leftover from the old privilege dropper.
-    bb rm -rf "$ROOTFS/tmp/.root-winlator" 2>/dev/null
+    leftover=$(active_mounts | bb tr '\n' ' ')
+    log "cleanup: FAILED, still mounted: $leftover"
     restore_home_owner
-    log "cleanup: done"
-    return 0
+    return 72
 }
 
 watch_app() {
@@ -271,7 +484,7 @@ prepare_box64_path() {
 }
 
 do_run() {
-    do_mount
+    do_mount || { log "run: mount failed"; cleanup; return 71; }
 
     bb rm -f "$STOP_FILE" 2>/dev/null
 

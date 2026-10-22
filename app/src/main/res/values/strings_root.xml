@@ -2,7 +2,6 @@
 <resources>
     <string name="root_required">Root access is required to install the chroot root filesystem.</string>
     <string name="root_chroot">Chroot</string>
-    <string name="root_chroot_fix_suid">Fix SUID on /data</string>
     <string name="root_chroot_bind_ram">Bind RAM directories (tmpfs)</string>
     <string name="root_chroot_bind_android">Bind Android directories</string>
     <string name="root_chroot_unavailable">unshare is not available on this device; chroot mode is disabled.</string>

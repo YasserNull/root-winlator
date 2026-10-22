@@ -51,7 +51,13 @@ public abstract class ChrootManager {
         String appFiles = context.getFilesDir().getAbsolutePath();
         String script = helper(context).getAbsolutePath();
         String bb = busybox(context).getAbsolutePath();
-        String cmd = "mkdir -p " + quote(ROOTFS_PATH) + "; " +
+        String mounted = quote(bb) + " awk -v r=" + quote(ROOTFS_PATH) +
+            " '$2==r || index($2,r \"/\")==1 {found=1} END{exit !found}' /proc/mounts";
+        String cmd = "/system/bin/sh " + quote(script) + " stop " + quote(ROOTFS_PATH) + " " +
+            quote(bb) + " " + RootBootstrap.uid() + " " + RootBootstrap.gid() + " " +
+            quote(stateDir(context)) + " || exit 70; " +
+            "if " + mounted + " >/dev/null 2>&1; then exit 71; fi; " +
+            "mkdir -p " + quote(ROOTFS_PATH) + "; " +
             "if [ ! -f " + quote(ROOTFS_PATH + "/.winlator/.rfs_version") + " ]; then " +
             "if [ -d " + quote(oldRoot) + " ]; then rm -rf " + quote(ROOTFS_PATH) +
             "; mv " + quote(oldRoot) + " " + quote(ROOTFS_PATH) + "; " +
@@ -64,9 +70,7 @@ public abstract class ChrootManager {
             "CTX=$(/system/bin/ls -Zd " + quote(appFiles) + " 2>/dev/null | " +
             quote(bb) + " awk '{print $1}'); " +
             "[ -n \"$CTX\" ] && /system/bin/chcon \"$CTX\" " + quote(ROOTFS_PATH) +
-            " 2>/dev/null; " +
-            "/system/bin/sh " + quote(script) + " stop " + quote(ROOTFS_PATH) + " " + quote(bb) + " " +
-            RootBootstrap.uid() + " " + RootBootstrap.gid() + " " + quote(stateDir(context));
+            " 2>/dev/null || true";
 
         try {
             Log.i(TAG, "prepare: rootfs="+ROOTFS_PATH+" oldRoot="+oldRoot+" oldImage="+oldImage);
@@ -100,15 +104,15 @@ public abstract class ChrootManager {
         }
     }
 
-    public static boolean mount(Context context, boolean fixSuid, boolean bindRam,
+    public static boolean mount(Context context, boolean bindRam,
                                 boolean bindAndroid) {
         String cmd = "/system/bin/sh " + quote(helper(context).getAbsolutePath()) + " mount " +
             quote(ROOTFS_PATH) + " " + quote(busybox(context).getAbsolutePath()) + " " +
-            (fixSuid ? "1" : "0") + " " + (bindRam ? "1" : "0") + " " +
+            (bindRam ? "1" : "0") + " " +
             (bindAndroid ? "1" : "0") + " " + RootBootstrap.uid() + " " +
             RootBootstrap.gid() + " " + quote(stateDir(context));
         try {
-            Log.i(TAG, "mount: start flags fixSuid="+fixSuid+" bindRam="+bindRam+
+            Log.i(TAG, "mount: start flags bindRam="+bindRam+
                 " bindAndroid="+bindAndroid);
             Shell.Result result = RootShell.exec(cmd);
             Log.i(TAG, "mount: success="+result.isSuccess()+" out="+result.getOut()+
@@ -130,7 +134,7 @@ public abstract class ChrootManager {
      * launcher; actual guest pids are discovered from /proc by ProcessHelper.
      */
     public static int launch(Context context, File rootDir, String command,
-                             EnvVars envVars, boolean fixSuid, boolean bindRam,
+                             EnvVars envVars, boolean bindRam,
                              boolean bindAndroid, Callback<Integer> terminationCallback) {
         // Env and command are passed as base64 arguments, never as app-writable
         // files. A chrooted guest can therefore not inject root shell code.
@@ -153,11 +157,11 @@ public abstract class ChrootManager {
         String helperCmd = "/system/bin/sh " + quote(script) + " run " + quote(ROOTFS_PATH) + " " +
             quote(bb) + " " + Process.myPid() + " " + envB64 + " " + cmdB64 + " " +
             RootBootstrap.uid() + " " + RootBootstrap.gid() + " " +
-            quote(stateDir(context)) + " " + (fixSuid ? "1" : "0") + " " +
-            (bindRam ? "1" : "0") + " " + (bindAndroid ? "1" : "0");
+            quote(stateDir(context)) + " " + (bindRam ? "1" : "0") + " " +
+            (bindAndroid ? "1" : "0");
 
         String su = new File("/system/bin/su").exists() ? "/system/bin/su" : "su";
-        Log.i(TAG, "launch: flags fixSuid="+fixSuid+" bindRam="+bindRam+
+        Log.i(TAG, "launch: flags bindRam="+bindRam+
             " bindAndroid="+bindAndroid+" envCount="+envVars.size()+
             " cmdLen="+command.length()+" su="+su);
         File suCwd = context.getFilesDir();

@@ -9,18 +9,12 @@ import com.winlator.xenvironment.EnvironmentComponent;
  * and unmounts them after the guest launcher has stopped.
  */
 public class ChrootComponent extends EnvironmentComponent {
-    private final boolean fixSuid;
     private final boolean bindRam;
     private final boolean bindAndroid;
 
-    public ChrootComponent(boolean fixSuid, boolean bindRam, boolean bindAndroid) {
-        this.fixSuid = fixSuid;
+    public ChrootComponent(boolean bindRam, boolean bindAndroid) {
         this.bindRam = bindRam;
         this.bindAndroid = bindAndroid;
-    }
-
-    public boolean isFixSuid() {
-        return fixSuid;
     }
 
     public boolean isBindRam() {
@@ -34,9 +28,9 @@ public class ChrootComponent extends EnvironmentComponent {
     @Override
     public void start() {
         Log.i("RootWinlator", "ChrootComponent.start ready="+RootBootstrap.isReady()+
-            " supported="+RootBootstrap.isChrootSupported()+" flags="+fixSuid+","+bindRam+","+bindAndroid);
+            " supported="+RootBootstrap.isChrootSupported()+" flags="+bindRam+","+bindAndroid);
         if (RootBootstrap.isReady() && RootBootstrap.isChrootSupported()) {
-            boolean ok = ChrootManager.mount(environment.getContext(), fixSuid, bindRam, bindAndroid);
+            boolean ok = ChrootManager.mount(environment.getContext(), bindRam, bindAndroid);
             Log.i("RootWinlator", "ChrootComponent.start mount="+ok);
         }
     }

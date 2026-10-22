@@ -534,18 +534,17 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
         FileUtils.clear(rootFS.getTmpDir());
 
-        final boolean chrootFixSuid = container == null || !container.getExtra("chrootFixSuid", "1").equals("0");
         final boolean chrootBindRam = container == null || !container.getExtra("chrootBindRam", "1").equals("0");
         final boolean chrootBindAndroid = container == null || !container.getExtra("chrootBindAndroid", "1").equals("0");
         Log.i("RootWinlator", "setupXEnvironment: container="+(container != null ? container.id : "null")+
-            " chrootFlags="+chrootFixSuid+","+chrootBindRam+","+chrootBindAndroid+
+            " chrootFlags="+chrootBindRam+","+chrootBindAndroid+
             " ready="+RootBootstrap.isReady()+" supported="+RootBootstrap.isChrootSupported()+
             " rootPath="+rootPath);
         // Must run before UnixSocketConfig.create(), otherwise the tmpfs mount hides
         // /tmp/.X11-unix and the native socket bind fails.
         if (RootBootstrap.isReady() && RootBootstrap.isChrootSupported())
             Log.i("RootWinlator", "setupXEnvironment: early mount="+
-                ChrootManager.mount(this, chrootFixSuid, chrootBindRam, chrootBindAndroid));
+                ChrootManager.mount(this, chrootBindRam, chrootBindAndroid));
 
         GuestProgramLauncherComponent guestProgramLauncherComponent = new GuestProgramLauncherComponent();
 
@@ -564,7 +563,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         }
 
         environment = new XEnvironment(this, rootFS);
-        environment.addComponent(new ChrootComponent(chrootFixSuid, chrootBindRam, chrootBindAndroid));
+        environment.addComponent(new ChrootComponent(chrootBindRam, chrootBindAndroid));
         environment.addComponent(new SysVSharedMemoryComponent(xServer, UnixSocketConfig.create(rootPath, UnixSocketConfig.SYSVSHM_SERVER_PATH)));
         environment.addComponent(new XServerComponent(xServer, UnixSocketConfig.create(rootPath, UnixSocketConfig.XSERVER_PATH)));
         environment.addComponent(new NetworkInfoUpdateComponent());

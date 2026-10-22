@@ -31,7 +31,10 @@ public class AboutDialog extends ContentDialog {
                 "Mesa (Turnip/Zink/VirGL) (<a href=\"https://www.mesa3d.org\">mesa3d.org</a>)",
                 "DXVK (<a href=\"https://github.com/doitsujin/dxvk\">github.com/doitsujin/dxvk</a>)",
                 "VKD3D (<a href=\"https://gitlab.winehq.org/wine/vkd3d\">gitlab.winehq.org/wine/vkd3d</a>)",
-                "CNC DDraw (<a href=\"https://github.com/FunkyFr3sh/cnc-ddraw\">github.com/FunkyFr3sh/cnc-ddraw</a>)"
+                "CNC DDraw (<a href=\"https://github.com/FunkyFr3sh/cnc-ddraw\">github.com/FunkyFr3sh/cnc-ddraw</a>)",
+                "Libsu (<a href=\"https://github.com/topjohnwu/libsu\">github.com/topjohnwu/libsu</a>) by topjohnwu",
+                "BusyBox binaries (<a href=\"https://github.com/YasserNull/ndk-box-kitchen\">github.com/YasserNull/ndk-box-kitchen</a>) by YasserNull",
+                "Distro chroot launching algorithms from (<a href=\"https://github.com/Magisk-Modules-Alt-Repo/chroot-distro\">github.com/Magisk-Modules-Alt-Repo/chroot-distro</a>) by YasserNull"
             );
 
             TextView tvCreditsAndThirdPartyApps = findViewById(R.id.TVCreditsAndThirdPartyApps);

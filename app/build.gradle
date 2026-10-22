@@ -5,7 +5,7 @@ android {
     compileSdk 35
 
     defaultConfig {
-        applicationId 'com.yassernull.rootwinlator'
+        applicationId 'com.rootwinlator'
         minSdkVersion 26
         targetSdkVersion 28
         versionCode 33
