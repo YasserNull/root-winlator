@@ -207,7 +207,7 @@ __attribute__((visibility("default"))) int hook_gsl_memory_free_pure(void *memDe
             kgsl_fd = open("/dev/kgsl-3d0", O_RDWR);
 
         kgsl_gpumem_get_info info{
-            .gpuaddr = gslMemDesc->gpuaddr
+            .gpuaddr = static_cast<unsigned long>(gslMemDesc->gpuaddr)
         };
 
         if (ioctl(kgsl_fd, IOCTL_KGSL_GPUMEM_GET_INFO, &info) < 0) {

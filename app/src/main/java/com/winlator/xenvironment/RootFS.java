@@ -5,6 +5,7 @@ import android.content.Context;
 import androidx.annotation.NonNull;
 
 import com.winlator.core.FileUtils;
+import com.winlator.root.ChrootManager;
 
 import java.io.File;
 import java.io.IOException;
@@ -25,7 +26,7 @@ public class RootFS {
 
     public static RootFS find(Context context) {
         File legacyDir = new File(context.getFilesDir(), "imagefs");
-        File rootDir = new File(context.getFilesDir(), "rootfs");
+        File rootDir = ChrootManager.getRootDir();
         if (legacyDir.isDirectory()) legacyDir.renameTo(rootDir);
         return new RootFS(rootDir);
     }

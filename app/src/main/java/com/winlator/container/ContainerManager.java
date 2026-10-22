@@ -2,6 +2,7 @@ package com.winlator.container;
 
 import android.content.Context;
 import android.os.Handler;
+import android.util.Log;
 
 import com.winlator.R;
 import com.winlator.core.Callback;
@@ -101,7 +102,12 @@ public class ContainerManager {
             data.put("id", id);
 
             File containerDir = new File(homeDir, RootFS.USER+"-"+id);
-            if (!containerDir.mkdirs()) return null;
+            Log.i("RootWinlator", "createContainer id="+id+" dir="+containerDir+
+                " parentExists="+homeDir.isDirectory());
+            if (!containerDir.mkdirs()) {
+                Log.e("RootWinlator", "createContainer: mkdirs failed for "+containerDir);
+                return null;
+            }
 
             Container container = new Container(id);
             container.setRootDir(containerDir);
@@ -111,6 +117,8 @@ public class ContainerManager {
             if (!isMainWineVersion) container.setWineVersion(data.getString("wineVersion"));
 
             if (!extractContainerPatternFile(container.getWineVersion(), containerDir)) {
+                Log.e("RootWinlator", "createContainer: pattern extraction failed for "+
+                    container.getWineVersion());
                 FileUtils.delete(containerDir);
                 return null;
             }
@@ -118,6 +126,7 @@ public class ContainerManager {
             container.saveData();
             maxContainerId++;
             containers.add(container);
+            Log.i("RootWinlator", "createContainer: success id="+id+" name="+container.getName());
             return container;
         }
         catch (JSONException e) {}

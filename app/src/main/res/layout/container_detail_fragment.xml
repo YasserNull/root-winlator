@@ -524,6 +524,36 @@
                         android:text="@string/system" />
                 </FrameLayout>
 
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp">
+
+                    <LinearLayout style="@style/FieldSet">
+                        <CheckBox
+                            android:id="@+id/CBCFixSuid"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/root_chroot_fix_suid" />
+
+                        <CheckBox
+                            android:id="@+id/CBCBindRam"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/root_chroot_bind_ram" />
+
+                        <CheckBox
+                            android:id="@+id/CBCBindAndroid"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/root_chroot_bind_android" />
+                    </LinearLayout>
+
+                    <TextView
+                        style="@style/FieldSetLabel"
+                        android:text="@string/root_chroot" />
+                </FrameLayout>
+
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"

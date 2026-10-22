@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="root_required">O acesso root é necessário para instalar o sistema de arquivos raiz do chroot.</string>
+    <string name="root_chroot">Chroot</string>
+    <string name="root_chroot_fix_suid">Corrigir SUID em /data</string>
+    <string name="root_chroot_bind_ram">Montar diretórios da RAM (tmpfs)</string>
+    <string name="root_chroot_bind_android">Montar diretórios do Android</string>
+    <string name="root_chroot_unavailable">unshare não está disponível neste dispositivo; o modo chroot está desativado.</string>
+    <string name="rootfs_not_ready">Os arquivos do sistema ainda estão sendo instalados. Aguarde a instalação terminar e tente novamente.</string>
+    <string name="container_create_failed">Falha ao criar o contêiner. Verifique o logcat com a tag RootWinlator.</string>
+    <string name="root_chroot_failed">Falha ao iniciar o chroot (status %1$d). Verifique o logcat com a tag RootWinlator.</string>
+</resources>

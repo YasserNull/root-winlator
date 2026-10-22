@@ -9,6 +9,9 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -77,6 +80,10 @@ import com.winlator.winhandler.TaskManagerDialog;
 import com.winlator.winhandler.WinHandler;
 import com.winlator.xconnector.UnixSocketConfig;
 import com.winlator.xenvironment.RootFS;
+import com.winlator.xenvironment.RootFSInstaller;
+import com.winlator.root.ChrootComponent;
+import com.winlator.root.ChrootManager;
+import com.winlator.root.RootBootstrap;
 import com.winlator.xenvironment.XEnvironment;
 import com.winlator.xenvironment.components.ALSAServerComponent;
 import com.winlator.xenvironment.components.GuestProgramLauncherComponent;
@@ -236,6 +243,9 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         xServer = new XServer(this, screenInfo);
         xServer.setWinHandler(winHandler);
         final boolean[] flags = {false, shortcut != null || getIntent().hasExtra("exec_path")};
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            if (!flags[0]) Log.e("RootWinlator", "starting_up: still no renderable window after 60s");
+        }, 60000);
         xServer.windowManager.addOnWindowModificationListener(new WindowManager.OnWindowModificationListener() {
             @Override
             public void onUpdateWindowContent(Window window) {
@@ -268,6 +278,25 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         setupUI();
 
         Executors.newSingleThreadExecutor().execute(() -> {
+            if (!RootBootstrap.isAttempted()) RootBootstrap.prepare(this, null);
+            Log.i("RootWinlator", "startup: waiting for root bootstrap");
+            if (!RootBootstrap.awaitReady(120000)) {
+                Log.e("RootWinlator", "startup: root bootstrap failed");
+                runOnUiThread(() -> {
+                    AppUtils.showToast(this, R.string.root_required);
+                    exit();
+                });
+                return;
+            }
+            Log.i("RootWinlator", "startup: waiting for rootfs install");
+            if (!RootFSInstaller.awaitReady(this, 120000)) {
+                Log.e("RootWinlator", "startup: rootfs install failed");
+                runOnUiThread(() -> {
+                    AppUtils.showToast(this, R.string.unable_to_install_system_files);
+                    exit();
+                });
+                return;
+            }
             if (!isGenerateWineprefix()) {
                 setupWineSystemFiles();
                 extractGraphicsDriverFiles();
@@ -505,6 +534,19 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
         FileUtils.clear(rootFS.getTmpDir());
 
+        final boolean chrootFixSuid = container == null || !container.getExtra("chrootFixSuid", "1").equals("0");
+        final boolean chrootBindRam = container == null || !container.getExtra("chrootBindRam", "1").equals("0");
+        final boolean chrootBindAndroid = container == null || !container.getExtra("chrootBindAndroid", "1").equals("0");
+        Log.i("RootWinlator", "setupXEnvironment: container="+(container != null ? container.id : "null")+
+            " chrootFlags="+chrootFixSuid+","+chrootBindRam+","+chrootBindAndroid+
+            " ready="+RootBootstrap.isReady()+" supported="+RootBootstrap.isChrootSupported()+
+            " rootPath="+rootPath);
+        // Must run before UnixSocketConfig.create(), otherwise the tmpfs mount hides
+        // /tmp/.X11-unix and the native socket bind fails.
+        if (RootBootstrap.isReady() && RootBootstrap.isChrootSupported())
+            Log.i("RootWinlator", "setupXEnvironment: early mount="+
+                ChrootManager.mount(this, chrootFixSuid, chrootBindRam, chrootBindAndroid));
+
         GuestProgramLauncherComponent guestProgramLauncherComponent = new GuestProgramLauncherComponent();
 
         if (container != null) {
@@ -522,6 +564,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         }
 
         environment = new XEnvironment(this, rootFS);
+        environment.addComponent(new ChrootComponent(chrootFixSuid, chrootBindRam, chrootBindAndroid));
         environment.addComponent(new SysVSharedMemoryComponent(xServer, UnixSocketConfig.create(rootPath, UnixSocketConfig.SYSVSHM_SERVER_PATH)));
         environment.addComponent(new XServerComponent(xServer, UnixSocketConfig.create(rootPath, UnixSocketConfig.XSERVER_PATH)));
         environment.addComponent(new NetworkInfoUpdateComponent());
@@ -556,7 +599,12 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         }
 
         guestProgramLauncherComponent.setEnvVars(envVars);
-        guestProgramLauncherComponent.setTerminationCallback((status) -> exit());
+        guestProgramLauncherComponent.setTerminationCallback((status) -> {
+            Log.i("RootWinlator", "XServerDisplay: guest termination status="+status);
+            if (status != 0) runOnUiThread(() -> AppUtils.showToast(this,
+                getString(R.string.root_chroot_failed, status)));
+            exit();
+        });
         environment.addComponent(guestProgramLauncherComponent);
 
         if (isGenerateWineprefix()) {
@@ -567,7 +615,9 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             envVars.putAll(overrideEnvVars);
             overrideEnvVars = null;
         }
+        Log.i("RootWinlator", "setupXEnvironment: starting environment components");
         environment.startEnvironmentComponents();
+        Log.i("RootWinlator", "setupXEnvironment: environment components started");
 
         winHandler.start();
         envVars.clear();

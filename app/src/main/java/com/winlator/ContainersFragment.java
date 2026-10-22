@@ -5,6 +5,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -31,7 +32,6 @@ import com.winlator.container.ContainerManager;
 import com.winlator.contentdialog.ContentDialog;
 import com.winlator.contentdialog.StorageInfoDialog;
 import com.winlator.core.PreloaderDialog;
-import com.winlator.xenvironment.RootFS;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -86,7 +86,9 @@ public class ContainersFragment extends Fragment {
     @Override
     public boolean onOptionsItemSelected(MenuItem menuItem) {
         if (menuItem.getItemId() == R.id.menu_item_add) {
-            if (!RootFS.find(getContext()).isValid()) return false;
+            // The rootfs may still be installing. Open the configuration screen
+            // immediately; creation is blocked later if the rootfs is not ready.
+            Log.i("RootWinlator", "add container clicked; opening ContainerDetailFragment");
             FragmentManager fragmentManager = getParentFragmentManager();
             fragmentManager.beginTransaction()
                 .addToBackStack(null)

@@ -8,6 +8,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.util.Log;
 import android.provider.DocumentsContract;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -16,6 +17,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
@@ -31,6 +33,7 @@ import androidx.fragment.app.FragmentActivity;
 import androidx.preference.PreferenceManager;
 
 import com.winlator.box64.Box64Preset;
+import com.winlator.xenvironment.RootFS;
 import com.winlator.box64.Box64PresetManager;
 import com.winlator.container.Container;
 import com.winlator.container.ContainerManager;
@@ -166,6 +169,13 @@ public class ContainerDetailFragment extends Fragment {
         final Spinner sBox64Preset = view.findViewById(R.id.SBox64Preset);
         Box64PresetManager.loadSpinner(sBox64Preset, isEditMode() ? container.getBox64Preset() : preferences.getString("box64_preset", Box64Preset.DEFAULT));
 
+        final CheckBox cbFixSuid = view.findViewById(R.id.CBCFixSuid);
+        final CheckBox cbBindRam = view.findViewById(R.id.CBCBindRam);
+        final CheckBox cbBindAndroid = view.findViewById(R.id.CBCBindAndroid);
+        cbFixSuid.setChecked(!isEditMode() || !container.getExtra("chrootFixSuid", "1").equals("0"));
+        cbBindRam.setChecked(!isEditMode() || !container.getExtra("chrootBindRam", "1").equals("0"));
+        cbBindAndroid.setChecked(!isEditMode() || !container.getExtra("chrootBindAndroid", "1").equals("0"));
+
         final CPUListView cpuListView = view.findViewById(R.id.CPUListView);
         final CPUListView cpuListViewWoW64 = view.findViewById(R.id.CPUListViewWoW64);
 
@@ -182,6 +192,13 @@ public class ContainerDetailFragment extends Fragment {
         }, R.id.LLTabWineConfiguration, R.id.LLTabWinComponents, R.id.LLTabEnvVars, R.id.LLTabDrives, R.id.LLTabAdvanced);
 
         view.findViewById(R.id.BTConfirm).setOnClickListener((v) -> {
+            Log.i("RootWinlator", "container confirm clicked; rootfsValid="+RootFS.find(context).isValid()+
+                " edit="+isEditMode());
+            if (!isEditMode() && !RootFS.find(context).isValid()) {
+                Log.e("RootWinlator", "container confirm blocked: rootfs is not valid/installed");
+                AppUtils.showToast(context, R.string.rootfs_not_ready);
+                return;
+            }
             try {
                 String name = etName.getText().toString();
                 String screenSize = getScreenSize(view);
@@ -219,6 +236,9 @@ public class ContainerDetailFragment extends Fragment {
                     container.setStartupSelection(startupSelection);
                     container.setBox64Preset(box64Preset);
                     container.setDesktopTheme(desktopTheme);
+                    container.putExtra("chrootFixSuid", cbFixSuid.isChecked() ? "1" : "0");
+                    container.putExtra("chrootBindRam", cbBindRam.isChecked() ? "1" : "0");
+                    container.putExtra("chrootBindAndroid", cbBindAndroid.isChecked() ? "1" : "0");
                     container.saveData();
 
                     saveWineRegistryKeys(view);
@@ -248,18 +268,28 @@ public class ContainerDetailFragment extends Fragment {
                     data.put("box64Preset", box64Preset);
                     data.put("desktopTheme", desktopTheme);
 
+                    JSONObject chrootData = new JSONObject();
+                    chrootData.put("chrootFixSuid", cbFixSuid.isChecked() ? "1" : "0");
+                    chrootData.put("chrootBindRam", cbBindRam.isChecked() ? "1" : "0");
+                    chrootData.put("chrootBindAndroid", cbBindAndroid.isChecked() ? "1" : "0");
+                    data.put("extraData", chrootData);
+
                     if (wineInfos.size() > 1) {
                         data.put("wineVersion", wineInfos.get(sWineVersion.getSelectedItemPosition()).identifier());
                     }
 
                     preloaderDialog.show(R.string.creating_container);
+                    Log.i("RootWinlator", "createContainerAsync start name="+name);
                     manager.createContainerAsync(data, (container) -> {
+                        Log.i("RootWinlator", "createContainerAsync done container="+
+                            (container != null ? container.id : "null"));
                         if (container != null) {
                             this.container = container;
                             saveWineRegistryKeys(view);
                         }
+                        else AppUtils.showToast(context, R.string.container_create_failed);
                         preloaderDialog.close();
-                        getActivity().onBackPressed();
+                        if (container != null) getActivity().onBackPressed();
                     });
                 }
             }

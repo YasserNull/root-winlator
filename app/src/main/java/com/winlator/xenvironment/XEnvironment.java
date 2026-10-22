@@ -58,7 +58,8 @@ public class XEnvironment implements Iterable<EnvironmentComponent> {
     }
 
     public void stopEnvironmentComponents() {
-        for (EnvironmentComponent environmentComponent : this) environmentComponent.stop();
+        // Reverse order: the guest must die before proc/dev/tmpfs are unmounted.
+        for (int i = components.size()-1; i >= 0; i--) components.get(i).stop();
     }
 
     public void onPause() {

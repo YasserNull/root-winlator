@@ -1,6 +1,7 @@
 package com.winlator.xenvironment;
 
 import android.content.Context;
+import android.util.Log;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -27,6 +28,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public abstract class RootFSInstaller {
     public static final byte LATEST_VERSION = 23; // TODO increment it on rootfs update
+    private static volatile boolean installing;
     public static final byte UPDATE_WINEPREFIX_VERSION = 16; // set it if main wine version change
     public static final String FILENAME = "rootfs.tzst";
 
@@ -44,8 +46,26 @@ public abstract class RootFSInstaller {
         }
     }
 
+    public static boolean awaitReady(Context context, long timeoutMs) {
+        RootFS rootFS = RootFS.find(context);
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (System.currentTimeMillis() < deadline) {
+            boolean current = rootFS.isValid() && rootFS.getVersion() >= LATEST_VERSION;
+            if (current && !installing) return true;
+            try {
+                Thread.sleep(200);
+            }
+            catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        return rootFS.isValid();
+    }
+
     public static void install(final MainActivity activity) {
         AppUtils.keepScreenOn(activity);
+        installing = true;
         RootFS rootFS = RootFS.find(activity);
         final File rootDir = rootFS.getRootDir();
 
@@ -53,6 +73,7 @@ public abstract class RootFSInstaller {
 
         final DownloadProgressDialog dialog = new DownloadProgressDialog(activity);
         dialog.show(R.string.installing_system_files);
+        Log.i("RootWinlator", "RootFSInstaller: start rootDir="+rootDir+" latest="+LATEST_VERSION);
         Executors.newSingleThreadExecutor().execute(() -> {
             clearRootDir(rootDir);
             final long contentLength = TarCompressorUtils.getContentLength(TarCompressorUtils.Type.ZSTD, activity, FILENAME, rootDir);
@@ -70,10 +91,15 @@ public abstract class RootFSInstaller {
             if (success) {
                 rootFS.createRFSVersionFile(LATEST_VERSION);
                 resetContainerRFSVersions(activity);
+                Log.i("RootWinlator", "RootFSInstaller: success version="+LATEST_VERSION);
             }
-            else AppUtils.showToast(activity, R.string.unable_to_install_system_files);
+            else {
+                Log.e("RootWinlator", "RootFSInstaller: extraction failed");
+                AppUtils.showToast(activity, R.string.unable_to_install_system_files);
+            }
 
             dialog.closeOnUiThread();
+            installing = false;
         });
     }
 

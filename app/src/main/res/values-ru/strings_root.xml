@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="root_required">Для установки корневой файловой системы chroot требуется доступ root.</string>
+    <string name="root_chroot">Chroot</string>
+    <string name="root_chroot_fix_suid">Исправить SUID на /data</string>
+    <string name="root_chroot_bind_ram">Подключать каталоги ОЗУ (tmpfs)</string>
+    <string name="root_chroot_bind_android">Подключать каталоги Android</string>
+    <string name="root_chroot_unavailable">unshare недоступен на этом устройстве; режим chroot отключён.</string>
+    <string name="rootfs_not_ready">Системные файлы всё ещё устанавливаются. Дождитесь завершения установки и повторите попытку.</string>
+    <string name="container_create_failed">Не удалось создать контейнер. Проверьте logcat с тегом RootWinlator.</string>
+    <string name="root_chroot_failed">Не удалось запустить chroot (статус %1$d). Проверьте logcat с тегом RootWinlator.</string>
+</resources>
