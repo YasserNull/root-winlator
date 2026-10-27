@@ -116,11 +116,14 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         if (usesChroot() && chrootComponent != null) {
             Log.i("RootWinlator", "GuestProgramLauncher: chroot mode command="+guestExecutable+
                 " flags="+chrootComponent.isBindRam()+","+
-                chrootComponent.isBindAndroid());
+                chrootComponent.isBindAndroid()+" dirs="+
+                chrootComponent.getTmpfsDirs()+","+chrootComponent.getAndroidDirs());
             int launchPid = ChrootManager.launch(environment.getContext(), rootDir,
                 "/usr/local/bin/box64 "+guestExecutable, envVars,
                 chrootComponent.isBindRam(),
-                chrootComponent.isBindAndroid(), (status) -> {
+                chrootComponent.isBindAndroid(),
+                chrootComponent.getTmpfsDirs(),
+                chrootComponent.getAndroidDirs(), (status) -> {
                     Log.i("RootWinlator", "GuestProgramLauncher: chroot guest terminated status="+status);
                     synchronized (lock) {
                         pid = -1;

@@ -536,15 +536,19 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
         final boolean chrootBindRam = container == null || !container.getExtra("chrootBindRam", "1").equals("0");
         final boolean chrootBindAndroid = container == null || !container.getExtra("chrootBindAndroid", "1").equals("0");
+        final String chrootTmpfsDirs = container != null ? container.getExtra("chrootTmpfsDirs", "") : "";
+        final String chrootAndroidDirs = container != null ? container.getExtra("chrootAndroidDirs", "") : "";
         Log.i("RootWinlator", "setupXEnvironment: container="+(container != null ? container.id : "null")+
             " chrootFlags="+chrootBindRam+","+chrootBindAndroid+
+            " chrootDirs="+chrootTmpfsDirs+","+chrootAndroidDirs+
             " ready="+RootBootstrap.isReady()+" supported="+RootBootstrap.isChrootSupported()+
             " rootPath="+rootPath);
         // Must run before UnixSocketConfig.create(), otherwise the tmpfs mount hides
         // /tmp/.X11-unix and the native socket bind fails.
         if (RootBootstrap.isReady() && RootBootstrap.isChrootSupported())
             Log.i("RootWinlator", "setupXEnvironment: early mount="+
-                ChrootManager.mount(this, chrootBindRam, chrootBindAndroid));
+                ChrootManager.mount(this, chrootBindRam, chrootBindAndroid,
+                    chrootTmpfsDirs, chrootAndroidDirs));
 
         GuestProgramLauncherComponent guestProgramLauncherComponent = new GuestProgramLauncherComponent();
 
@@ -557,13 +561,14 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
             envVars.putAll(container.getEnvVars());
             if (shortcut != null) envVars.putAll(shortcut.getExtra("envVars"));
-            if (!envVars.has("WINEESYNC")) envVars.put("WINEESYNC", "1");
+            envVars.put("WINEESYNC", "0");
 
             guestProgramLauncherComponent.setBox64Preset(shortcut != null ? shortcut.getExtra("box64Preset", container.getBox64Preset()) : container.getBox64Preset());
         }
 
         environment = new XEnvironment(this, rootFS);
-        environment.addComponent(new ChrootComponent(chrootBindRam, chrootBindAndroid));
+        environment.addComponent(new ChrootComponent(chrootBindRam, chrootBindAndroid,
+            chrootTmpfsDirs, chrootAndroidDirs));
         environment.addComponent(new SysVSharedMemoryComponent(xServer, UnixSocketConfig.create(rootPath, UnixSocketConfig.SYSVSHM_SERVER_PATH)));
         environment.addComponent(new XServerComponent(xServer, UnixSocketConfig.create(rootPath, UnixSocketConfig.XSERVER_PATH)));
         environment.addComponent(new NetworkInfoUpdateComponent());

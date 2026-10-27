@@ -106,14 +106,28 @@ public abstract class ChrootManager {
 
     public static boolean mount(Context context, boolean bindRam,
                                 boolean bindAndroid) {
+        return mount(context, bindRam, bindAndroid, null, null);
+    }
+
+    /**
+     * Mounts the chroot using the helper's current command line:
+     * {@code mount <rootfs> <busybox> <uid> <gid> <state_dir> [--tmpfs-dirs ...] [--android-dirs ...]}.
+     * When a custom list is supplied it is passed verbatim; the helper expands
+     * commas/colons/newlines and skips unsafe entries.
+     */
+    public static boolean mount(Context context, boolean bindRam,
+                                boolean bindAndroid, String tmpfsDirs,
+                                String androidDirs) {
         String cmd = "/system/bin/sh " + quote(helper(context).getAbsolutePath()) + " mount " +
             quote(ROOTFS_PATH) + " " + quote(busybox(context).getAbsolutePath()) + " " +
-            (bindRam ? "1" : "0") + " " +
-            (bindAndroid ? "1" : "0") + " " + RootBootstrap.uid() + " " +
-            RootBootstrap.gid() + " " + quote(stateDir(context));
+            RootBootstrap.uid() + " " + RootBootstrap.gid() + " " +
+            quote(stateDir(context)) +
+            mountDirsArg("--tmpfs-dirs", bindRam, tmpfsDirs) +
+            mountDirsArg("--android-dirs", bindAndroid, androidDirs);
         try {
             Log.i(TAG, "mount: start flags bindRam="+bindRam+
-                " bindAndroid="+bindAndroid);
+                " bindAndroid="+bindAndroid+" tmpfsDirs="+tmpfsDirs+
+                " androidDirs="+androidDirs);
             Shell.Result result = RootShell.exec(cmd);
             Log.i(TAG, "mount: success="+result.isSuccess()+" out="+result.getOut()+
                 " err="+result.getErr());
@@ -129,13 +143,22 @@ public abstract class ChrootManager {
         }
     }
 
+    public static int launch(Context context, File rootDir, String command,
+                             EnvVars envVars, boolean bindRam,
+                             boolean bindAndroid, Callback<Integer> terminationCallback) {
+        return launch(context, rootDir, command, envVars, bindRam, bindAndroid,
+            null, null, terminationCallback);
+    }
+
     /**
      * Starts su -> helper -> chroot. The returned pid belongs to the su
      * launcher; actual guest pids are discovered from /proc by ProcessHelper.
      */
     public static int launch(Context context, File rootDir, String command,
                              EnvVars envVars, boolean bindRam,
-                             boolean bindAndroid, Callback<Integer> terminationCallback) {
+                             boolean bindAndroid, String tmpfsDirs,
+                             String androidDirs,
+                             Callback<Integer> terminationCallback) {
         // Env and command are passed as base64 arguments, never as app-writable
         // files. A chrooted guest can therefore not inject root shell code.
         String envScript = buildEnvironment(envVars, rootDir.getAbsolutePath());
@@ -157,12 +180,14 @@ public abstract class ChrootManager {
         String helperCmd = "/system/bin/sh " + quote(script) + " run " + quote(ROOTFS_PATH) + " " +
             quote(bb) + " " + Process.myPid() + " " + envB64 + " " + cmdB64 + " " +
             RootBootstrap.uid() + " " + RootBootstrap.gid() + " " +
-            quote(stateDir(context)) + " " + (bindRam ? "1" : "0") + " " +
-            (bindAndroid ? "1" : "0");
+            quote(stateDir(context)) +
+            mountDirsArg("--tmpfs-dirs", bindRam, tmpfsDirs) +
+            mountDirsArg("--android-dirs", bindAndroid, androidDirs);
 
         String su = new File("/system/bin/su").exists() ? "/system/bin/su" : "su";
         Log.i(TAG, "launch: flags bindRam="+bindRam+
-            " bindAndroid="+bindAndroid+" envCount="+envVars.size()+
+            " bindAndroid="+bindAndroid+" tmpfsDirs="+tmpfsDirs+
+            " androidDirs="+androidDirs+" envCount="+envVars.size()+
             " cmdLen="+command.length()+" su="+su);
         File suCwd = context.getFilesDir();
         if (suCwd == null || !suCwd.isDirectory()) suCwd = new File("/");
@@ -204,6 +229,17 @@ public abstract class ChrootManager {
 
     private static String shellQuote(String value) {
         return "'" + value.replace("'", "'\\''") + "'";
+    }
+
+    /**
+     * Builds an explicit {@code --flag=value} argument for the helper.
+     * A non-empty custom list implies binding is enabled; otherwise the
+     * container boolean is passed as 0/1.
+     */
+    private static String mountDirsArg(String flag, boolean enabled, String dirs) {
+        String value = dirs != null ? dirs.trim() : "";
+        if (!value.isEmpty()) return " " + quote(flag + "=" + value);
+        return " " + quote(flag + "=" + (enabled ? "1" : "0"));
     }
 
     private static String quote(String value) {

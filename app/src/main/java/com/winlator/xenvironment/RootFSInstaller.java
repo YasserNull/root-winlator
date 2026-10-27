@@ -29,7 +29,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
 
 public abstract class RootFSInstaller {
-    public static final byte LATEST_VERSION = 23; // TODO increment it on rootfs update
+    public static final byte LATEST_VERSION = 24; // TODO increment it on rootfs update
     private static volatile boolean installing;
     public static final byte UPDATE_WINEPREFIX_VERSION = 16; // set it if main wine version change
     public static final String FILENAME = "rootfs.tzst";

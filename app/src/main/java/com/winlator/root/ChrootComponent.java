@@ -11,10 +11,19 @@ import com.winlator.xenvironment.EnvironmentComponent;
 public class ChrootComponent extends EnvironmentComponent {
     private final boolean bindRam;
     private final boolean bindAndroid;
+    private final String tmpfsDirs;
+    private final String androidDirs;
 
     public ChrootComponent(boolean bindRam, boolean bindAndroid) {
+        this(bindRam, bindAndroid, null, null);
+    }
+
+    public ChrootComponent(boolean bindRam, boolean bindAndroid,
+                           String tmpfsDirs, String androidDirs) {
         this.bindRam = bindRam;
         this.bindAndroid = bindAndroid;
+        this.tmpfsDirs = tmpfsDirs;
+        this.androidDirs = androidDirs;
     }
 
     public boolean isBindRam() {
@@ -25,12 +34,22 @@ public class ChrootComponent extends EnvironmentComponent {
         return bindAndroid;
     }
 
+    public String getTmpfsDirs() {
+        return tmpfsDirs;
+    }
+
+    public String getAndroidDirs() {
+        return androidDirs;
+    }
+
     @Override
     public void start() {
         Log.i("RootWinlator", "ChrootComponent.start ready="+RootBootstrap.isReady()+
-            " supported="+RootBootstrap.isChrootSupported()+" flags="+bindRam+","+bindAndroid);
+            " supported="+RootBootstrap.isChrootSupported()+" flags="+bindRam+","+bindAndroid+
+            " dirs="+tmpfsDirs+","+androidDirs);
         if (RootBootstrap.isReady() && RootBootstrap.isChrootSupported()) {
-            boolean ok = ChrootManager.mount(environment.getContext(), bindRam, bindAndroid);
+            boolean ok = ChrootManager.mount(environment.getContext(), bindRam,
+                bindAndroid, tmpfsDirs, androidDirs);
             Log.i("RootWinlator", "ChrootComponent.start mount="+ok);
         }
     }
