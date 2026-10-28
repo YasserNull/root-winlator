@@ -85,19 +85,10 @@ find_magick() {
 
 is_excluded() {
     local name="$1"
-    local item canonical
+    local item
 
     for item in $EXCLUDES; do
-        canonical="$item"
-        case "$item" in
-            root) canonical="libsu" ;;
-            helper) canonical="chroot_helper" ;;
-            ui|chroot_ui) canonical="chroot_settings" ;;
-            exec) canonical="chroot_exec" ;;
-            wallpaper) canonical="wallpapers" ;;
-            drawer) canonical="app_name" ;;
-        esac
-        [ "$canonical" = "$name" ] && return 0
+        [ "$item" = "$name" ] && return 0
     done
 
     return 1
@@ -935,13 +926,13 @@ case "$PATCH_TYPE" in
     icon)
         run_patch icon "red app icon" patch_icon
         ;;
-    wallpapers|wallpaper)
+    wallpapers)
         run_patch wallpapers "red wallpapers" patch_wallpapers
         ;;
     theme)
         run_patch theme "red UI theme" patch_theme
         ;;
-    app_name|drawer)
+    app_name)
         run_patch app_name "change app name at drawer" patch_app_name
         ;;
     package)
@@ -950,16 +941,16 @@ case "$PATCH_TYPE" in
     rootfs)
         run_patch rootfs "rootfs paths and native assets" patch_rootfs
         ;;
-    libsu|root)
+    libsu)
         run_patch libsu "root backend (libsu)" patch_libsu
         ;;
-    chroot_helper|helper)
+    chroot_helper)
         run_patch chroot_helper "runtime chroot helper" patch_chroot_helper
         ;;
-    chroot_settings|chroot_ui|ui)
+    chroot_settings)
         run_patch chroot_settings "added chroot settings" patch_chroot_settings
         ;;
-    chroot_exec|exec)
+    chroot_exec)
         run_patch chroot_exec "chroot execution hooks" patch_chroot_exec
         ;;
     about)

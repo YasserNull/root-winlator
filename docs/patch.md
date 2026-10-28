@@ -174,8 +174,6 @@ Installs the runtime chroot helper downloader.
 
 Adds the chroot settings UI.
 
-Aliases: `chroot_ui`, `ui`.
-
 - Adds the RAM bind and Android bind checkboxes to
   `container_detail_fragment.xml`.
 - Hooks `ContainerDetailFragment` with `ChrootUIHelper` for loading, saving,
@@ -219,23 +217,20 @@ This patch is not part of `all`. Run it explicitly:
 
 ## Excluding Patches
 
-`--exclude` accepts patch names and aliases.
+`--exclude` accepts patch names.
 
 Examples:
 
 ```bash
 ./apply_patches.sh winlator-app --exclude "theme about"
 ./apply_patches.sh winlator-app all --exclude "wallpapers,ndk"
-./apply_patches.sh winlator-app --exclude "ui drawer"
+./apply_patches.sh winlator-app --exclude "chroot_settings app_name"
 ```
 
-Aliases:
+## Output Colors
 
-| Alias | Patch |
-|-------|-------|
-| `root` | `libsu` |
-| `helper` | `chroot_helper` |
-| `ui`, `chroot_ui` | `chroot_settings` |
-| `exec` | `chroot_exec` |
-| `wallpaper` | `wallpapers` |
-| `drawer` | `app_name` |
+- Blue: informational messages
+- Cyan: patch start
+- Cycling colors: patch completion
+- Yellow: excluded patch
+- Red: error
