@@ -1,6 +1,6 @@
 # Patch Guide
 
-`apply_patches.sh` applies the Root Winlator changes to a clean Winlator source
+`apply_patches.sh` applies the Root Winlator changes to a clean winlator-app source
 tree. It is idempotent: patches skip work that is already applied.
 
 ## Requirements
@@ -12,7 +12,11 @@ tree. It is idempotent: patches skip work that is already applied.
 - `zstd` when the rootfs asset fallback patcher is used
 - Network access on the device at runtime, for the chroot helper download
 
-The script does not modify `local.properties`.
+## First Step: Clone Winlator
+
+```bash
+git clone https://github.com/brunodev85/winlator-app
+```
 
 ## Usage
 
@@ -226,11 +230,3 @@ Examples:
 ./apply_patches.sh winlator-app all --exclude "wallpapers,ndk"
 ./apply_patches.sh winlator-app --exclude "chroot_settings app_name"
 ```
-
-## Output Colors
-
-- Blue: informational messages
-- Cyan: patch start
-- Cycling colors: patch completion
-- Yellow: excluded patch
-- Red: error

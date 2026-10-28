@@ -44,7 +44,6 @@ Note: mount points are removed automatically when you exit the container or clos
 # Requirements
 
 - **Root:** root access is mandatory, because `chroot` and `mount` require it
-- **Regular Winlator:** the official Winlator app must be installed on your device
 
 # Warning
 
@@ -57,6 +56,12 @@ The correct way is to delete all containers from within the app. The rootfs is t
 ## Installation
 You can download and install *Root Winlator* via one of the following methods:
 **GitHub Releases**: Download the latest APK from the [Releases page](https://github.com/YasserNull/root-winlator/releases).
+
+## Apply the Patch
+
+You can apply the changes yourself using `apply_patch.sh`.
+
+Read `docs/patch.md` for more details.
 
 ## License
 *Root Winlator* is licensed under the [GNU Lesser General Public License v2.1](LICENSE).
