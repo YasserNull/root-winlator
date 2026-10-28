@@ -703,6 +703,58 @@ PYTHON_SCRIPT
     fi
 }
 
+patch_build_settings() {
+    log "patch: Java 17 and Gradle memory"
+
+    local app_gradle="$APP/build.gradle"
+    [ -f "$app_gradle" ] || return 0
+
+    python3 - <<'PYTHON_SCRIPT' "$app_gradle"
+import sys, re
+
+path = sys.argv[1]
+with open(path, "r", encoding="utf-8") as f:
+    text = f.read()
+
+if "compileOptions" in text:
+    text = re.sub(r'sourceCompatibility\s+[^\n]+', 'sourceCompatibility JavaVersion.VERSION_17', text, count=1)
+    text = re.sub(r'targetCompatibility\s+[^\n]+', 'targetCompatibility JavaVersion.VERSION_17', text, count=1)
+else:
+    match = re.search(r'android\s*\{', text)
+    if match:
+        block = "\n    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_17\n        targetCompatibility JavaVersion.VERSION_17\n    }\n"
+        text = text[:match.end()] + block + text[match.end():]
+
+with open(path, "w", encoding="utf-8") as f:
+    f.write(text)
+print("set Java 17 compile target")
+PYTHON_SCRIPT
+
+    local props="$TARGET/gradle.properties"
+    python3 - <<'PYTHON_SCRIPT' "$props"
+import sys, re
+
+path = sys.argv[1]
+try:
+    with open(path, "r", encoding="utf-8") as f:
+        text = f.read()
+except FileNotFoundError:
+    text = ""
+
+line = "org.gradle.jvmargs=-Xmx2g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
+if re.search(r'^org\.gradle\.jvmargs=.*$', text, re.M):
+    text = re.sub(r'^org\.gradle\.jvmargs=.*$', line, text, count=1, flags=re.M)
+else:
+    if text and not text.endswith("\n"):
+        text += "\n"
+    text += line + "\n"
+
+with open(path, "w", encoding="utf-8") as f:
+    f.write(text)
+print("set Gradle 2g heap")
+PYTHON_SCRIPT
+}
+
 patch_ndk_build() {
     log "patch: NDK ndkBuild configuration and adrenotools fixes"
 
@@ -916,6 +968,7 @@ case "$PATCH_TYPE" in
         run_patch theme "red UI theme" patch_theme
         run_patch app_name "change app name at drawer" patch_app_name
         run_patch package "app package com.rootwinlator" patch_package
+        run_patch build "Java 17 and Gradle memory" patch_build_settings
         run_patch rootfs "rootfs paths and native assets" patch_rootfs
         run_patch libsu "root backend (libsu)" patch_libsu
         run_patch chroot_helper "runtime chroot helper" patch_chroot_helper
@@ -937,6 +990,9 @@ case "$PATCH_TYPE" in
         ;;
     package)
         run_patch package "app package com.rootwinlator" patch_package
+        ;;
+    build)
+        run_patch build "Java 17 and Gradle memory" patch_build_settings
         ;;
     rootfs)
         run_patch rootfs "rootfs paths and native assets" patch_rootfs
@@ -960,7 +1016,7 @@ case "$PATCH_TYPE" in
         run_patch ndk "ndk build" patch_ndk_build
         ;;
     *)
-        die "unknown patch type: $PATCH_TYPE (expected: all, icon, wallpapers, theme, app_name, package, rootfs, libsu, chroot_helper, chroot_settings, chroot_exec, about, ndk)"
+        die "unknown patch type: $PATCH_TYPE (expected: all, icon, wallpapers, theme, app_name, package, build, rootfs, libsu, chroot_helper, chroot_settings, chroot_exec, about, ndk)"
         ;;
 esac
 

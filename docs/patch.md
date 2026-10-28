@@ -66,12 +66,13 @@ Examples:
 | 3 | `theme` | red UI theme |
 | 4 | `app_name` | change app name at drawer |
 | 5 | `package` | app package com.rootwinlator |
-| 6 | `rootfs` | rootfs paths and native assets |
-| 7 | `libsu` | root backend (libsu) |
-| 8 | `chroot_helper` | runtime chroot helper |
-| 9 | `chroot_settings` | added chroot settings |
-| 10 | `chroot_exec` | chroot execution hooks |
-| 11 | `about` | changes at about |
+| 6 | `build` | Java 17 and Gradle memory |
+| 7 | `rootfs` | rootfs paths and native assets |
+| 8 | `libsu` | root backend (libsu) |
+| 9 | `chroot_helper` | runtime chroot helper |
+| 10 | `chroot_settings` | added chroot settings |
+| 11 | `chroot_exec` | chroot execution hooks |
+| 12 | `about` | changes at about |
 
 `ndk` is intentionally not included in `all`. It only runs when requested
 explicitly:
@@ -137,6 +138,15 @@ Changes the application package to `com.rootwinlator`.
   `activity.getPackageName()`
 - `AppUtils.INTERNAL_STORAGE`
 - Cache path in `app/src/main/cpp/winlator/include/winlator.h`
+
+### `build`
+
+- Sets `sourceCompatibility` and `targetCompatibility` to Java 17 in
+  `app/build.gradle`. This removes the JDK 21 deprecation warning for Java 8
+  source and target values.
+- Sets `org.gradle.jvmargs` to a 2 GB heap with a 1 GB metaspace limit in
+  `gradle.properties`. This prevents `Java heap space` failures in tasks such
+  as `compressReleaseAssets`.
 
 ### `rootfs`
 
