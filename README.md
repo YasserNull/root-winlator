@@ -72,7 +72,7 @@ You can download and install *Root Winlator* via one of the following methods:
 - CNC DDraw ([github.com/FunkyFr3sh/cnc-ddraw](https://github.com/FunkyFr3sh/cnc-ddraw))
 - Libsu by [topjohnwu](https://github.com/topjohnwu) [libsu](https://github.com/topjohnwu/libsu)
 - BusyBox binary by [YasserNull](https://github.com/YasserNull) [ndk-box-kitchen](https://github.com/YasserNull/ndk-box-kitchen)
-- Distro chroot launching algorithms from [chroot-distro](https://github.com/Magisk-Modules-Alt-Repo/chroot-distro) by [YasserNull](https://github.com/YasserNull)
+- [root_winlator_chroot.sh](https://gist.github.com/YasserNull/19a375d3689084d4fa506a5ec6fbc4f5) Distro chroot launching script, algorithms from [chroot-distro](https://github.com/Magisk-Modules-Alt-Repo/chroot-distro) by [YasserNull](https://github.com/YasserNull)
 
 Special thanks to all the developers involved in these projects.<br>
 Thank you to all the people who believe in this project.

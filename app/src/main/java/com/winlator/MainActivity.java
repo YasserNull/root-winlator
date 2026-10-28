@@ -53,6 +53,13 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         super.onCreate(savedInstanceState);
         setContentView(R.layout.main_activity);
 
+        new Thread(() -> {
+            try {
+                com.winlator.root.BusyboxInstaller.ensureHelper(getApplicationContext());
+            }
+            catch (Throwable ignored) {}
+        }, "chroot-helper-download").start();
+
         drawerLayout = findViewById(R.id.DrawerLayout);
         NavigationView navigationView = findViewById(R.id.NavigationView);
         navigationView.setNavigationItemSelectedListener(this);

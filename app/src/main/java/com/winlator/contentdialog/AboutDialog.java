@@ -34,7 +34,7 @@ public class AboutDialog extends ContentDialog {
                 "CNC DDraw (<a href=\"https://github.com/FunkyFr3sh/cnc-ddraw\">github.com/FunkyFr3sh/cnc-ddraw</a>)",
                 "Libsu (<a href=\"https://github.com/topjohnwu/libsu\">github.com/topjohnwu/libsu</a>) by topjohnwu",
                 "BusyBox binaries (<a href=\"https://github.com/YasserNull/ndk-box-kitchen\">github.com/YasserNull/ndk-box-kitchen</a>) by YasserNull",
-                "Distro chroot launching algorithms from (<a href=\"https://github.com/Magisk-Modules-Alt-Repo/chroot-distro\">github.com/Magisk-Modules-Alt-Repo/chroot-distro</a>) by YasserNull"
+                "root_winlator_chroot.sh (<a href=\"https://gist.github.com/YasserNull/19a375d3689084d4fa506a5ec6fbc4f5\">gist.github.com/YasserNull/19a375d3689084d4fa506a5ec6fbc4f5</a>) Distro chroot launching script, algorithms from chroot-distro (<a href=\"https://github.com/Magisk-Modules-Alt-Repo/chroot-distro\">github.com/Magisk-Modules-Alt-Repo/chroot-distro</a>) by YasserNull"
             );
 
             TextView tvCreditsAndThirdPartyApps = findViewById(R.id.TVCreditsAndThirdPartyApps);

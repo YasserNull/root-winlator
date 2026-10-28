@@ -187,17 +187,58 @@ public abstract class ChrootManager {
         String su = new File("/system/bin/su").exists() ? "/system/bin/su" : "su";
         Log.i(TAG, "launch: flags bindRam="+bindRam+
             " bindAndroid="+bindAndroid+" tmpfsDirs="+tmpfsDirs+
-            " androidDirs="+androidDirs+" envCount="+envVars.size()+
+            " androidDirs="+androidDirs+
             " cmdLen="+command.length()+" su="+su);
         File suCwd = context.getFilesDir();
         if (suCwd == null || !suCwd.isDirectory()) suCwd = new File("/");
-        int pid = ProcessHelper.exec(new String[]{su, "-c", helperCmd}, new EnvVars(), suCwd,
-            (status) -> {
-                Log.i(TAG, "launch: guest wrapper exited status="+status);
-                if (terminationCallback != null) terminationCallback.call(status);
-            }, true);
+        int pid = execSu(su, helperCmd, suCwd, terminationCallback);
         Log.i(TAG, "launch: su wrapper pid="+pid);
         return pid;
+    }
+
+    private static int execSu(String su, String helperCmd, File suCwd, Callback<Integer> terminationCallback) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder(su, "-c", helperCmd).directory(suCwd);
+            pb.redirectErrorStream(true);
+            java.lang.Process p = pb.start();
+            java.lang.reflect.Field f = p.getClass().getDeclaredField("pid");
+            f.setAccessible(true);
+            int pid = f.getInt(p);
+            java.util.concurrent.Executors.newSingleThreadExecutor().execute(() -> {
+                try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream()))) {
+                    String line;
+                    while ((line = r.readLine()) != null) Log.i("RootWinlator", line);
+                } catch (Throwable ignored) {}
+            });
+            if (terminationCallback != null) {
+                java.util.concurrent.Executors.newSingleThreadExecutor().execute(() -> {
+                    try {
+                        int code = p.waitFor();
+                        Log.i(TAG, "launch: guest wrapper exited status=" + code);
+                        terminationCallback.call(code);
+                    } catch (Throwable ignored) {}
+                });
+            }
+            return pid;
+        } catch (Throwable e) {
+            Log.e(TAG, "execSu failed", e);
+            return -1;
+        }
+    }
+
+    public static boolean awaitRootFSReady(Context context, long timeoutMs) {
+        com.winlator.xenvironment.RootFS rootFS = com.winlator.xenvironment.RootFS.find(context);
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (System.currentTimeMillis() < deadline) {
+            if (rootFS.isValid()) return true;
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        return rootFS.isValid();
     }
 
     public static void stop(Context context) {
@@ -207,6 +248,25 @@ public abstract class ChrootManager {
             quote(stateDir(context));
         Log.i(TAG, "stop: requested");
         RootShell.execAsync(cmd);
+    }
+
+    public static int launchIfChroot(com.winlator.xenvironment.XEnvironment environment,
+                                     File rootDir, String guestExecutable,
+                                     EnvVars envVars, Callback<Integer> terminationCallback) {
+        if (!RootBootstrap.isReady() || !RootBootstrap.isChrootSupported()) return -1;
+        ChrootComponent component = environment != null ? environment.getComponent(ChrootComponent.class) : null;
+        if (component == null) return -1;
+        return launch(environment.getContext(), rootDir,
+            "/usr/local/bin/box64 " + guestExecutable, envVars,
+            component.isBindRam(), component.isBindAndroid(),
+            component.getTmpfsDirs(), component.getAndroidDirs(),
+            terminationCallback);
+    }
+
+    public static void stopIfChroot(Context context) {
+        if (RootBootstrap.isReady() && RootBootstrap.isChrootSupported()) {
+            stop(context);
+        }
     }
 
     private static String buildEnvironment(EnvVars envVars, String rootDir) {
