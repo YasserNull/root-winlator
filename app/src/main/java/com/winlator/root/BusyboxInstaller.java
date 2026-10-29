@@ -24,9 +24,9 @@ public abstract class BusyboxInstaller {
         "https://github.com/YasserNull/ndk-box-kitchen/releases/download/build%231/";
     private static final String HELPER_NAME = "root_winlator_chroot.sh";
     private static final String HELPER_URL =
-        "https://gist.githubusercontent.com/YasserNull/19a375d3689084d4fa506a5ec6fbc4f5/raw/318e782e1fd0e70f03a22e0a1b227786f2074129/root_winlator_chroot.sh";
+        "https://gist.githubusercontent.com/YasserNull/19a375d3689084d4fa506a5ec6fbc4f5/raw/ed498a56424c6213169b05941d65499f19f9faca/root_winlator_chroot.sh";
     private static final String HELPER_SHA256 =
-        "71dcb86f2f231d84c76fa58e7630df0bb015102a6f35e38edf3b97406c4ffa80";
+        "0e42f829b36143b657a03a68b1a84a52e4590fa880732f192e0642c3968b4599";
 
     private BusyboxInstaller() {}
 

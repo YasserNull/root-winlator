@@ -527,10 +527,8 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
                 final boolean chrootBindRam = container == null || !container.getExtra("chrootBindRam", "1").equals("0");
         final boolean chrootBindAndroid = container == null || !container.getExtra("chrootBindAndroid", "1").equals("0");
-        final String chrootTmpfsDirs = container != null ? container.getExtra("chrootTmpfsDirs", "") : "";
-        final String chrootAndroidDirs = container != null ? container.getExtra("chrootAndroidDirs", "") : "";
         if (com.winlator.root.RootBootstrap.isReady() && com.winlator.root.RootBootstrap.isChrootSupported()) {
-            com.winlator.root.ChrootManager.mount(this, chrootBindRam, chrootBindAndroid, chrootTmpfsDirs, chrootAndroidDirs);
+            com.winlator.root.ChrootManager.mount(this, chrootBindRam, chrootBindAndroid);
         }
 
         GuestProgramLauncherComponent guestProgramLauncherComponent = new GuestProgramLauncherComponent();
@@ -550,7 +548,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         }
 
         environment = new XEnvironment(this, rootFS);
-        environment.addComponent(new com.winlator.root.ChrootComponent(chrootBindRam, chrootBindAndroid, chrootTmpfsDirs, chrootAndroidDirs));
+        environment.addComponent(new com.winlator.root.ChrootComponent(chrootBindRam, chrootBindAndroid));
         environment.addComponent(new SysVSharedMemoryComponent(xServer, UnixSocketConfig.create(rootPath, UnixSocketConfig.SYSVSHM_SERVER_PATH)));
         environment.addComponent(new XServerComponent(xServer, UnixSocketConfig.create(rootPath, UnixSocketConfig.XSERVER_PATH)));
         environment.addComponent(new NetworkInfoUpdateComponent());

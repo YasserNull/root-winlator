@@ -111,17 +111,16 @@ public abstract class ChrootManager {
 
     /**
      * Mounts the chroot using the helper's command line:
-     * {@code mount <rootfs> <busybox> <uid> <gid> <state_dir> [--tmpfs-dirs] [--android-dirs]}.
+     * {@code mount <rootfs> <busybox> [bind_ram] [bind_android] <uid> <gid> <state_dir>}.
      */
     public static boolean mount(Context context, boolean bindRam,
                                 boolean bindAndroid, String tmpfsDirs,
                                 String androidDirs) {
         String cmd = "/system/bin/sh " + quote(helper(context).getAbsolutePath()) + " mount " +
             quote(ROOTFS_PATH) + " " + quote(busybox(context).getAbsolutePath()) + " " +
+            (bindRam ? "1" : "0") + " " + (bindAndroid ? "1" : "0") + " " +
             RootBootstrap.uid() + " " + RootBootstrap.gid() + " " +
-            quote(stateDir(context)) +
-            mountDirsArg("--tmpfs-dirs", bindRam, tmpfsDirs) +
-            mountDirsArg("--android-dirs", bindAndroid, androidDirs);
+            quote(stateDir(context));
         try {
             Log.i(TAG, "mount: start flags bindRam="+bindRam+
                 " bindAndroid="+bindAndroid+" tmpfsDirs="+tmpfsDirs+
@@ -178,9 +177,8 @@ public abstract class ChrootManager {
         String helperCmd = "/system/bin/sh " + quote(script) + " run " + quote(ROOTFS_PATH) + " " +
             quote(bb) + " " + Process.myPid() + " " + envB64 + " " + cmdB64 + " " +
             RootBootstrap.uid() + " " + RootBootstrap.gid() + " " +
-            quote(stateDir(context)) +
-            mountDirsArg("--tmpfs-dirs", bindRam, tmpfsDirs) +
-            mountDirsArg("--android-dirs", bindAndroid, androidDirs);
+            quote(stateDir(context)) + " " +
+            (bindRam ? "1" : "0") + " " + (bindAndroid ? "1" : "0");
 
         String su = new File("/system/bin/su").exists() ? "/system/bin/su" : "su";
         Log.i(TAG, "launch: flags bindRam="+bindRam+
@@ -287,15 +285,6 @@ public abstract class ChrootManager {
 
     private static String shellQuote(String value) {
         return "'" + value.replace("'", "'\\''") + "'";
-    }
-
-    /**
-     * Builds a flag argument for the helper script.
-     * The chroot helper script accepts only {@code --android-dirs} and {@code --tmpfs-dirs}
-     * boolean flags without values.
-     */
-    private static String mountDirsArg(String flag, boolean enabled, String dirs) {
-        return enabled ? " " + flag : "";
     }
 
     private static String quote(String value) {

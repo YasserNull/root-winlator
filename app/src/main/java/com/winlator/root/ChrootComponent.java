@@ -45,11 +45,9 @@ public class ChrootComponent extends EnvironmentComponent {
     @Override
     public void start() {
         Log.i("RootWinlator", "ChrootComponent.start ready="+RootBootstrap.isReady()+
-            " supported="+RootBootstrap.isChrootSupported()+" flags="+bindRam+","+bindAndroid+
-            " dirs="+tmpfsDirs+","+androidDirs);
+            " supported="+RootBootstrap.isChrootSupported()+" flags="+bindRam+","+bindAndroid);
         if (RootBootstrap.isReady() && RootBootstrap.isChrootSupported()) {
-            boolean ok = ChrootManager.mount(environment.getContext(), bindRam,
-                bindAndroid, tmpfsDirs, androidDirs);
+            boolean ok = ChrootManager.mount(environment.getContext(), bindRam, bindAndroid);
             Log.i("RootWinlator", "ChrootComponent.start mount="+ok);
         }
     }
