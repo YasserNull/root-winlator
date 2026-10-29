@@ -19,10 +19,6 @@ public class EnvVars implements Iterable<String> {
         return this;
     }
 
-    public int size() {
-        return data.size();
-    }
-
     public void putAll(String[] items) {
         if (items == null) return;
         for (String item : items) {

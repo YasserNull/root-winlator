@@ -1,7 +1,6 @@
 package com.winlator.xenvironment.components;
 
 import android.content.Context;
-import android.util.Log;
 import android.content.SharedPreferences;
 import android.os.Process;
 
@@ -16,9 +15,6 @@ import com.winlator.core.FileUtils;
 import com.winlator.core.GeneralComponents;
 import com.winlator.core.LocaleHelper;
 import com.winlator.core.ProcessHelper;
-import com.winlator.root.ChrootComponent;
-import com.winlator.root.ChrootManager;
-import com.winlator.root.RootBootstrap;
 import com.winlator.widget.LogView;
 import com.winlator.xconnector.UnixSocketConfig;
 import com.winlator.xenvironment.EnvironmentComponent;
@@ -49,7 +45,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
     public void stop() {
         synchronized (lock) {
             if (pid != -1) {
-                if (usesChroot()) ChrootManager.stop(environment.getContext());
+                com.winlator.root.ChrootManager.stopIfChroot(environment.getContext());
                 Process.killProcess(pid);
                 pid = -1;
             }
@@ -112,31 +108,8 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
 
         String command = rootDir+"/usr/local/bin/box64 "+guestExecutable;
 
-        ChrootComponent chrootComponent = environment.getComponent(ChrootComponent.class);
-        if (usesChroot() && chrootComponent != null) {
-            Log.i("RootWinlator", "GuestProgramLauncher: chroot mode command="+guestExecutable+
-                " flags="+chrootComponent.isBindRam()+","+
-                chrootComponent.isBindAndroid()+" dirs="+
-                chrootComponent.getTmpfsDirs()+","+chrootComponent.getAndroidDirs());
-            int launchPid = ChrootManager.launch(environment.getContext(), rootDir,
-                "/usr/local/bin/box64 "+guestExecutable, envVars,
-                chrootComponent.isBindRam(),
-                chrootComponent.isBindAndroid(),
-                chrootComponent.getTmpfsDirs(),
-                chrootComponent.getAndroidDirs(), (status) -> {
-                    Log.i("RootWinlator", "GuestProgramLauncher: chroot guest terminated status="+status);
-                    synchronized (lock) {
-                        pid = -1;
-                    }
-                    if (terminationCallback != null) terminationCallback.call(status);
-                });
-            Log.i("RootWinlator", "GuestProgramLauncher: chroot launch returned pid="+launchPid);
-            if (launchPid < 0) {
-                Log.e("RootWinlator", "GuestProgramLauncher: chroot launch failed before starting su");
-                if (terminationCallback != null) terminationCallback.call(-1);
-            }
-            return launchPid;
-        }
+                int chrootPid = com.winlator.root.ChrootManager.launchIfChroot(environment, rootDir, guestExecutable, envVars, terminationCallback);
+        if (chrootPid >= 0) return chrootPid;
 
         return ProcessHelper.exec(command, envVars, rootDir, (status) -> {
             synchronized (lock) {
@@ -144,14 +117,6 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
             }
             if (terminationCallback != null) terminationCallback.call(status);
         });
-    }
-
-    private boolean usesChroot() {
-        boolean result = RootBootstrap.isReady() && RootBootstrap.isChrootSupported() &&
-            environment.getComponent(ChrootComponent.class) != null;
-        Log.i("RootWinlator", "GuestProgramLauncher: usesChroot="+result+
-            " ready="+RootBootstrap.isReady()+" supported="+RootBootstrap.isChrootSupported());
-        return result;
     }
 
     private void extractBox64File() {

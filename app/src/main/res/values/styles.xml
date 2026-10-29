@@ -39,7 +39,7 @@
         <item name="progressBarIndeterminateImage">@drawable/progress_bar_indeterminate_light</item>
     </style>
     <style name="AppThemeDark" parent="@style/AppThemeBase">
-        <item name="colorAccent">#ef5350</item>
+        <item name="colorAccent">#e53935</item>
         <item name="colorPrimary">#7f1d1d</item>
         <item name="colorPrimaryDark">#4a1010</item>
         <item name="colorControlNormal">#616161</item>

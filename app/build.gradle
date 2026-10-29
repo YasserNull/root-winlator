@@ -1,19 +1,23 @@
 apply plugin: 'com.android.application'
 
 android {
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
     namespace 'com.winlator'
     compileSdk 35
 
     defaultConfig {
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
         applicationId 'com.rootwinlator'
         minSdkVersion 26
         targetSdkVersion 28
         versionCode 33
         versionName "11.2"
-
-        ndk {
-            abiFilters 'arm64-v8a'
-        }
     }
 
     buildTypes {
@@ -31,11 +35,6 @@ android {
         checkReleaseBuilds false
     }
 
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-
     ndkVersion '29.0.14206865'
 
     externalNativeBuild {
@@ -46,6 +45,7 @@ android {
 }
 
 dependencies {
+    implementation 'com.github.topjohnwu.libsu:core:6.0.0'
     implementation 'androidx.appcompat:appcompat:1.4.0'
     implementation 'androidx.preference:preference:1.2.1'
     implementation 'com.google.android.material:material:1.4.0'
@@ -53,5 +53,4 @@ dependencies {
     implementation 'org.tukaani:xz:1.7'
     implementation 'org.apache.commons:commons-compress:1.20'
     implementation 'androidx.lifecycle:lifecycle-process:2.5.1'
-    implementation 'com.github.topjohnwu.libsu:core:6.0.0'
 }

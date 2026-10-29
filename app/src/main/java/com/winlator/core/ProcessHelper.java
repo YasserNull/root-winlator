@@ -3,13 +3,10 @@ package com.winlator.core;
 import android.os.Process;
 import android.system.Os;
 import android.system.OsConstants;
-import android.util.Log;
 
 import androidx.annotation.NonNull;
 
 import com.winlator.MainActivity;
-import com.winlator.root.RootBootstrap;
-import com.winlator.root.RootShell;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -47,18 +44,15 @@ public abstract class ProcessHelper {
     }
 
     public static void suspendProcess(int pid) {
-        if (RootBootstrap.isReady()) RootShell.execAsync("kill -STOP "+pid);
-        else Process.sendSignal(pid, OsConstants.SIGSTOP);
+        if (com.winlator.root.RootBootstrap.isReady()) com.winlator.root.RootShell.execAsync("kill -STOP "+pid); else Process.sendSignal(pid, OsConstants.SIGSTOP);
     }
 
     public static void resumeProcess(int pid) {
-        if (RootBootstrap.isReady()) RootShell.execAsync("kill -CONT "+pid);
-        else Process.sendSignal(pid, OsConstants.SIGCONT);
+        if (com.winlator.root.RootBootstrap.isReady()) com.winlator.root.RootShell.execAsync("kill -CONT "+pid); else Process.sendSignal(pid, OsConstants.SIGCONT);
     }
 
     public static void killProcess(int pid) {
-        if (RootBootstrap.isReady()) RootShell.execAsync("kill -KILL "+pid);
-        else Process.sendSignal(pid, OsConstants.SIGKILL);
+        if (com.winlator.root.RootBootstrap.isReady()) com.winlator.root.RootShell.execAsync("kill -KILL "+pid); else Process.sendSignal(pid, OsConstants.SIGKILL);
     }
 
     public static int exec(String command) {
@@ -74,61 +68,29 @@ public abstract class ProcessHelper {
     }
 
     public static int exec(String command, EnvVars envVars, File workingDir, Callback<Integer> terminationCallback) {
-        return exec(splitCommand(command), envVars, workingDir, terminationCallback);
-    }
-
-    public static int exec(String[] command, EnvVars envVars, File workingDir, Callback<Integer> terminationCallback) {
-        return exec(command, envVars, workingDir, terminationCallback, false);
-    }
-
-    public static int exec(String[] command, EnvVars envVars, File workingDir,
-                           Callback<Integer> terminationCallback, boolean captureOutput) {
         int pid = -1;
         try {
-            ProcessBuilder processBuilder = (new ProcessBuilder(command)).directory(workingDir);
-            boolean debug = !debugCallbacks.isEmpty();
-            if (captureOutput) processBuilder.redirectErrorStream(true);
-            else if (!debug) processBuilder.redirectOutput(new File("/dev/null")).redirectErrorStream(true);
+            ProcessBuilder processBuilder = (new ProcessBuilder(splitCommand(command))).directory(workingDir);
+            if (debugCallbacks.isEmpty()) processBuilder.redirectOutput(new File("/dev/null")).redirectErrorStream(true);
 
             Map<String, String> environment = processBuilder.environment();
-            if (envVars != null) for (String name : envVars) environment.put(name, envVars.get(name));
+            for (String name : envVars) environment.put(name, envVars.get(name));
 
             java.lang.Process process = processBuilder.start();
             Field pidField = process.getClass().getDeclaredField("pid");
             pidField.setAccessible(true);
             pid = pidField.getInt(process);
             pidField.setAccessible(false);
-            if (captureOutput) Log.i("RootWinlator", "ProcessHelper: started pid="+pid+" cmd="+command[0]);
 
-            if (captureOutput) {
-                createLogThread(process.getInputStream());
-            }
-            else if (debug) {
+            if (!debugCallbacks.isEmpty()) {
                 createDebugThread(process.getInputStream());
                 createDebugThread(process.getErrorStream());
             }
 
             if (terminationCallback != null) createWaitForThread(process, terminationCallback);
         }
-        catch (Exception e) {
-            Log.e("RootWinlator", "ProcessHelper: exec failed for "+command[0], e);
-        }
+        catch (Exception e) {}
         return pid;
-    }
-
-    private static void createLogThread(final InputStream inputStream) {
-        Executors.newSingleThreadExecutor().execute(() -> {
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    Log.i("RootWinlator", line);
-                    synchronized (debugCallbacks) {
-                        for (Callback<String> callback : debugCallbacks) callback.call(line);
-                    }
-                }
-            }
-            catch (IOException e) {}
-        });
     }
 
     private static void createDebugThread(final InputStream inputStream) {

@@ -32,7 +32,6 @@ public abstract class WineInstaller {
         containerPatternDir.mkdirs();
 
         File linkFile = new File(rootDir, RootFS.HOME_PATH);
-        // Relative target keeps the symlink valid inside the chroot.
         FileUtils.symlink("../opt/installed-wine/preinstall/container-pattern", linkFile.getPath());
 
         GuestProgramLauncherComponent guestProgramLauncherComponent = environment.getComponent(GuestProgramLauncherComponent.class);
