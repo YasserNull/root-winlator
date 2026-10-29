@@ -2,6 +2,7 @@ package com.winlator.core;
 
 import android.content.Context;
 import android.net.Uri;
+import android.util.Log;
 
 import org.apache.commons.compress.archivers.ArchiveInputStream;
 import org.apache.commons.compress.archivers.ArchiveOutputStream;
@@ -113,6 +114,7 @@ public abstract class TarCompressorUtils {
             return extract(type, context.getAssets().open(assetFile), destination, onExtractFileListener);
         }
         catch (IOException e) {
+            Log.e("RootWinlator", "TarCompressorUtils: failed to open asset '" + assetFile + "': " + e.getMessage(), e);
             return false;
         }
     }
@@ -146,10 +148,13 @@ public abstract class TarCompressorUtils {
     }
 
     private static boolean extract(Type type, InputStream source, File destination, OnExtractFileListener onExtractFileListener) {
-        if (source == null) return false;
+        if (source == null) {
+            Log.e("RootWinlator", "TarCompressorUtils: source stream is null");
+            return false;
+        }
+        TarArchiveEntry entry = null;
         try (InputStream inStream = getCompressorInputStream(type, source);
              ArchiveInputStream tar = new TarArchiveInputStream(inStream)) {
-            TarArchiveEntry entry;
             while ((entry = (TarArchiveEntry)tar.getNextEntry()) != null) {
                 if (!tar.canReadEntryData(entry)) continue;
                 File file = new File(destination, entry.getName());
@@ -160,15 +165,24 @@ public abstract class TarCompressorUtils {
                 }
 
                 if (entry.isDirectory()) {
-                    if (!file.isDirectory()) file.mkdirs();
+                    if (!file.isDirectory() && !file.mkdirs()) {
+                        Log.e("RootWinlator", "TarCompressorUtils: failed to create directory: " + file.getAbsolutePath());
+                    }
                 }
                 else {
+                    File parent = file.getParentFile();
+                    if (parent != null && !parent.isDirectory() && !parent.mkdirs()) {
+                        Log.e("RootWinlator", "TarCompressorUtils: failed to create parent dir: " + parent.getAbsolutePath());
+                    }
                     if (entry.isSymbolicLink()) {
                         FileUtils.symlink(entry.getLinkName(), file.getAbsolutePath());
                     }
                     else {
                         try (BufferedOutputStream outStream = new BufferedOutputStream(new FileOutputStream(file), StreamUtils.BUFFER_SIZE)) {
-                            if (!StreamUtils.copy(tar, outStream)) return false;
+                            if (!StreamUtils.copy(tar, outStream)) {
+                                Log.e("RootWinlator", "TarCompressorUtils: failed copying data for: " + file.getAbsolutePath());
+                                return false;
+                            }
                         }
                     }
                 }
@@ -178,6 +192,8 @@ public abstract class TarCompressorUtils {
             return true;
         }
         catch (IOException e) {
+            String entryName = entry != null ? entry.getName() : "stream";
+            Log.e("RootWinlator", "TarCompressorUtils: extraction failed at '" + entryName + "': " + e.getMessage(), e);
             return false;
         }
     }

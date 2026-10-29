@@ -56,6 +56,7 @@ public class RootFS {
             FileUtils.writeString(file, String.valueOf(version));
         }
         catch (IOException e) {
+            android.util.Log.e("RootWinlator", "RootFS: failed to create version file " + file + ": " + e.getMessage(), e);
             e.printStackTrace();
         }
     }

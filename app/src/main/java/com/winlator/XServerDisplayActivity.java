@@ -290,7 +290,9 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             }
             Log.i("RootWinlator", "startup: waiting for rootfs install");
             if (!RootFSInstaller.awaitReady(this, 120000)) {
-                Log.e("RootWinlator", "startup: rootfs install failed");
+                Log.e("RootWinlator", "startup: rootfs install failed or timed out (valid=" +
+                    RootFS.find(this).isValid() + ", version=" + RootFS.find(this).getVersion() +
+                    ", latest=" + RootFSInstaller.LATEST_VERSION + ")");
                 runOnUiThread(() -> {
                     AppUtils.showToast(this, R.string.unable_to_install_system_files);
                     exit();

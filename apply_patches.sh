@@ -222,10 +222,31 @@ patch_rootfs() {
         log "patched: ${rootfs_java#"$TARGET"/}"
     fi
 
-    local installer_java="$APP/src/main/java/com/winlator/xenvironment/RootFSInstaller.java"
-    if [ -f "$installer_java" ]; then
-        sed -i 's/public static final byte LATEST_VERSION = 23;/public static final byte LATEST_VERSION = 24;/' "$installer_java"
-        log "patched: ${installer_java#"$TARGET"/}"
+    local src_installer="$SCRIPT_DIR/app/src/main/java/com/winlator/xenvironment/RootFSInstaller.java"
+    local dst_installer="$APP/src/main/java/com/winlator/xenvironment/RootFSInstaller.java"
+    if [ -f "$src_installer" ] && [ "$SCRIPT_DIR" != "$TARGET" ]; then
+        mkdir -p "$(dirname "$dst_installer")"
+        cp -f "$src_installer" "$dst_installer"
+        log "updated RootFSInstaller.java from source"
+    elif [ -f "$dst_installer" ]; then
+        sed -i 's/public static final byte LATEST_VERSION = 23;/public static final byte LATEST_VERSION = 24;/' "$dst_installer"
+        log "patched: ${dst_installer#"$TARGET"/}"
+    fi
+
+    local src_tar_utils="$SCRIPT_DIR/app/src/main/java/com/winlator/core/TarCompressorUtils.java"
+    local dst_tar_utils="$APP/src/main/java/com/winlator/core/TarCompressorUtils.java"
+    if [ -f "$src_tar_utils" ] && [ "$SCRIPT_DIR" != "$TARGET" ]; then
+        mkdir -p "$(dirname "$dst_tar_utils")"
+        cp -f "$src_tar_utils" "$dst_tar_utils"
+        log "updated TarCompressorUtils.java from source"
+    fi
+
+    local src_rootfs="$SCRIPT_DIR/app/src/main/java/com/winlator/xenvironment/RootFS.java"
+    local dst_rootfs="$APP/src/main/java/com/winlator/xenvironment/RootFS.java"
+    if [ -f "$src_rootfs" ] && [ "$SCRIPT_DIR" != "$TARGET" ]; then
+        mkdir -p "$(dirname "$dst_rootfs")"
+        cp -f "$src_rootfs" "$dst_rootfs"
+        log "updated RootFS.java from source"
     fi
 
     local container_java="$APP/src/main/java/com/winlator/container/Container.java"
@@ -628,13 +649,18 @@ with open(path, "r", encoding="utf-8") as f:
 t1 = 'if (!isGenerateWineprefix()) {'
 h1 = """            if (!com.winlator.root.RootBootstrap.isAttempted()) com.winlator.root.RootBootstrap.prepare(this, null);
             if (!com.winlator.root.RootBootstrap.awaitReady(120000)) {
+                android.util.Log.e("RootWinlator", "startup: root bootstrap failed");
                 runOnUiThread(() -> {
                     com.winlator.core.AppUtils.showToast(this, R.string.root_required);
                     exit();
                 });
                 return;
             }
-            if (!com.winlator.root.ChrootManager.awaitRootFSReady(this, 120000)) {
+            if (!com.winlator.xenvironment.RootFSInstaller.awaitReady(this, 120000)) {
+                android.util.Log.e("RootWinlator", "startup: rootfs install failed or timed out (valid=" +
+                    com.winlator.xenvironment.RootFS.find(this).isValid() + ", version=" +
+                    com.winlator.xenvironment.RootFS.find(this).getVersion() + ", latest=" +
+                    com.winlator.xenvironment.RootFSInstaller.LATEST_VERSION + ")");
                 runOnUiThread(() -> {
                     com.winlator.core.AppUtils.showToast(this, R.string.unable_to_install_system_files);
                     exit();

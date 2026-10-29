@@ -24,6 +24,8 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
@@ -77,49 +79,92 @@ public abstract class RootFSInstaller {
         dialog.show(R.string.installing_system_files);
         Log.i("RootWinlator", "RootFSInstaller: start rootDir="+rootDir+" latest="+LATEST_VERSION);
         Executors.newSingleThreadExecutor().execute(() -> {
-            // The install path may run before the root bootstrap, so make sure
-            // the chroot helper and busybox exist before calling prepare().
-            if (!BusyboxInstaller.ensure(activity)) {
-                Log.e("RootWinlator", "RootFSInstaller: cannot install chroot helper");
-                AppUtils.showToast(activity, R.string.unable_to_install_system_files);
-                dialog.closeOnUiThread();
-                installing = false;
-                return;
-            }
-            // Never delete a rootfs that is still mounted: the bind mounts
-            // point at host directories and rm would follow them.
-            if (!ChrootManager.prepare(activity)) {
-                Log.e("RootWinlator", "RootFSInstaller: cannot unmount/verify before clearing rootfs");
-                AppUtils.showToast(activity, R.string.unable_to_install_system_files);
-                dialog.closeOnUiThread();
-                installing = false;
-                return;
-            }
-            clearRootDir(rootDir);
-            final long contentLength = TarCompressorUtils.getContentLength(TarCompressorUtils.Type.ZSTD, activity, FILENAME, rootDir);
-            AtomicLong totalSizeRef = new AtomicLong();
-
-            boolean success = TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, activity, FILENAME, rootDir, (file, size) -> {
-                if (size > 0) {
-                    long totalSize = totalSizeRef.addAndGet(size);
-                    final int progress = (int)(((float)totalSize / contentLength) * 100);
-                    activity.runOnUiThread(() -> dialog.setProgress(progress));
+            try {
+                // The install path may run before the root bootstrap, so make sure
+                // the chroot helper and busybox exist before calling prepare().
+                if (!BusyboxInstaller.ensure(activity)) {
+                    File helper = BusyboxInstaller.getHelperScript(activity);
+                    File busybox = BusyboxInstaller.getBusyboxFile(activity);
+                    Log.e("RootWinlator", "RootFSInstaller: rootfs install failed: cannot install chroot helper or busybox" +
+                        " (helperExists=" + helper.isFile() + ", helperSize=" + (helper.isFile() ? helper.length() : 0) +
+                        ", busyboxExists=" + busybox.isFile() + ", busyboxSize=" + (busybox.isFile() ? busybox.length() : 0) + ")");
+                    AppUtils.showToast(activity, R.string.unable_to_install_system_files);
+                    return;
                 }
-                return file;
-            });
+                // Never delete a rootfs that is still mounted: the bind mounts
+                // point at host directories and rm would follow them.
+                if (!ChrootManager.prepare(activity)) {
+                    Log.e("RootWinlator", "RootFSInstaller: rootfs install failed: cannot unmount or prepare rootfs directory before clearing" +
+                        " (rootDir=" + rootDir + ", suReady=" + com.winlator.root.RootBootstrap.isReady() + ")");
+                    AppUtils.showToast(activity, R.string.unable_to_install_system_files);
+                    return;
+                }
+                clearRootDir(rootDir);
+                if (!rootDir.exists() && !rootDir.mkdirs()) {
+                    Log.e("RootWinlator", "RootFSInstaller: rootfs install failed: rootDir does not exist and mkdirs failed: " + rootDir +
+                        " (parentExists=" + (rootDir.getParentFile() != null && rootDir.getParentFile().exists()) +
+                        ", parentCanWrite=" + (rootDir.getParentFile() != null && rootDir.getParentFile().canWrite()) + ")");
+                    AppUtils.showToast(activity, R.string.unable_to_install_system_files);
+                    return;
+                }
+                if (!rootDir.canWrite()) {
+                    Log.e("RootWinlator", "RootFSInstaller: rootfs install failed: rootDir is not writable: " + rootDir +
+                        " (canRead=" + rootDir.canRead() + ", canWrite=" + rootDir.canWrite() + ", check permissions/SELinux)");
+                    AppUtils.showToast(activity, R.string.unable_to_install_system_files);
+                    return;
+                }
 
-            if (success) {
-                rootFS.createRFSVersionFile(LATEST_VERSION);
-                resetContainerRFSVersions(activity);
-                Log.i("RootWinlator", "RootFSInstaller: success version="+LATEST_VERSION);
+                long freeSpaceBytes = rootDir.getFreeSpace();
+                long freeSpaceMB = freeSpaceBytes / (1024 * 1024);
+                Log.i("RootWinlator", "RootFSInstaller: rootDir free space = " + freeSpaceMB + " MB");
+                if (freeSpaceMB < 100) {
+                    Log.e("RootWinlator", "RootFSInstaller: rootfs install failed: low disk space on " + rootDir +
+                        " (" + freeSpaceMB + " MB available, rootfs requires more free space)");
+                    AppUtils.showToast(activity, R.string.unable_to_install_system_files);
+                    return;
+                }
+
+                try (InputStream assetCheck = activity.getAssets().open(FILENAME)) {
+                    // asset accessible
+                }
+                catch (IOException e) {
+                    Log.e("RootWinlator", "RootFSInstaller: rootfs install failed: asset '" + FILENAME + "' not found or unreadable: " + e.getMessage(), e);
+                    AppUtils.showToast(activity, R.string.unable_to_install_system_files);
+                    return;
+                }
+
+                final long contentLength = TarCompressorUtils.getContentLength(TarCompressorUtils.Type.ZSTD, activity, FILENAME, rootDir);
+                AtomicLong totalSizeRef = new AtomicLong();
+
+                boolean success = TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, activity, FILENAME, rootDir, (file, size) -> {
+                    if (size > 0) {
+                        long totalSize = totalSizeRef.addAndGet(size);
+                        final int progress = (int)(((float)totalSize / contentLength) * 100);
+                        activity.runOnUiThread(() -> dialog.setProgress(progress));
+                    }
+                    return file;
+                });
+
+                if (success) {
+                    rootFS.createRFSVersionFile(LATEST_VERSION);
+                    resetContainerRFSVersions(activity);
+                    Log.i("RootWinlator", "RootFSInstaller: success version="+LATEST_VERSION);
+                }
+                else {
+                    Log.e("RootWinlator", "RootFSInstaller: rootfs install failed: archive extraction failed for " + FILENAME +
+                        " into " + rootDir + " (contentLength=" + contentLength + ", extractedBytes=" + totalSizeRef.get() +
+                        ", freeSpace=" + (rootDir.getFreeSpace() / (1024 * 1024)) + "MB)");
+                    AppUtils.showToast(activity, R.string.unable_to_install_system_files);
+                }
             }
-            else {
-                Log.e("RootWinlator", "RootFSInstaller: extraction failed");
+            catch (Throwable t) {
+                Log.e("RootWinlator", "RootFSInstaller: rootfs install failed with unexpected exception: " + t.getMessage(), t);
                 AppUtils.showToast(activity, R.string.unable_to_install_system_files);
             }
-
-            dialog.closeOnUiThread();
-            installing = false;
+            finally {
+                dialog.closeOnUiThread();
+                installing = false;
+            }
         });
     }
 

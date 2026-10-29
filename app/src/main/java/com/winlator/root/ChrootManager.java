@@ -78,7 +78,7 @@ public abstract class ChrootManager {
             Log.i(TAG, "prepare: success="+result.isSuccess()+" out="+result.getOut()+
                 " err="+result.getErr());
             if (!result.isSuccess()) {
-                Log.w(TAG, "prepare: " + result.getErr());
+                Log.e(TAG, "prepare failed (exitCode=" + result.getCode() + "): " + result.getErr());
                 return false;
             }
             return true;
