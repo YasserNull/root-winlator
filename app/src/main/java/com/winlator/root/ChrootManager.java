@@ -110,10 +110,8 @@ public abstract class ChrootManager {
     }
 
     /**
-     * Mounts the chroot using the helper's current command line:
-     * {@code mount <rootfs> <busybox> <uid> <gid> <state_dir> [--tmpfs-dirs ...] [--android-dirs ...]}.
-     * When a custom list is supplied it is passed verbatim; the helper expands
-     * commas/colons/newlines and skips unsafe entries.
+     * Mounts the chroot using the helper's command line:
+     * {@code mount <rootfs> <busybox> <uid> <gid> <state_dir> [--tmpfs-dirs] [--android-dirs]}.
      */
     public static boolean mount(Context context, boolean bindRam,
                                 boolean bindAndroid, String tmpfsDirs,
@@ -292,14 +290,12 @@ public abstract class ChrootManager {
     }
 
     /**
-     * Builds an explicit {@code --flag=value} argument for the helper.
-     * A non-empty custom list implies binding is enabled; otherwise the
-     * container boolean is passed as 0/1.
+     * Builds a flag argument for the helper script.
+     * The chroot helper script accepts only {@code --android-dirs} and {@code --tmpfs-dirs}
+     * boolean flags without values.
      */
     private static String mountDirsArg(String flag, boolean enabled, String dirs) {
-        String value = dirs != null ? dirs.trim() : "";
-        if (!value.isEmpty()) return " " + quote(flag + "=" + value);
-        return " " + quote(flag + "=" + (enabled ? "1" : "0"));
+        return enabled ? " " + flag : "";
     }
 
     private static String quote(String value) {

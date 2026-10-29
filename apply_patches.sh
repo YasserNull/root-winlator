@@ -423,8 +423,14 @@ patch_chroot_helper() {
         log "installed/updated BusyboxInstaller.java"
     fi
 
+    if [ -f "$dst_busybox" ]; then
+        sed -i 's/71dcb86f2f231d84c76fa58e7630df0bb015102a6f35e38edf3b97406c4ffa80/0e42f829b36143b657a03a68b1a84a52e4590fa880732f192e0642c3968b4599/g' "$dst_busybox"
+        sed -i 's/318e782e1fd0e70f03a22e0a1b227786f2074129/ed498a56424c6213169b05941d65499f19f9faca/g' "$dst_busybox"
+    fi
+
     [ -f "$dst_busybox" ] || die "missing $dst_busybox"
     grep -q "HELPER_SHA256" "$dst_busybox" || die "BusyboxInstaller.java has no runtime helper verification"
+    grep -q "0e42f829b36143b657a03a68b1a84a52e4590fa880732f192e0642c3968b4599" "$dst_busybox" || die "BusyboxInstaller.java has wrong helper SHA256"
     grep -q "root_winlator_chroot.sh" "$dst_busybox" || die "BusyboxInstaller.java has wrong helper name"
 
     local main_activity="$APP/src/main/java/com/winlator/MainActivity.java"
@@ -675,10 +681,8 @@ if t1 in code:
 t2 = 'GuestProgramLauncherComponent guestProgramLauncherComponent = new GuestProgramLauncherComponent();'
 h2 = """        final boolean chrootBindRam = container == null || !container.getExtra("chrootBindRam", "1").equals("0");
         final boolean chrootBindAndroid = container == null || !container.getExtra("chrootBindAndroid", "1").equals("0");
-        final String chrootTmpfsDirs = container != null ? container.getExtra("chrootTmpfsDirs", "") : "";
-        final String chrootAndroidDirs = container != null ? container.getExtra("chrootAndroidDirs", "") : "";
         if (com.winlator.root.RootBootstrap.isReady() && com.winlator.root.RootBootstrap.isChrootSupported()) {
-            com.winlator.root.ChrootManager.mount(this, chrootBindRam, chrootBindAndroid, chrootTmpfsDirs, chrootAndroidDirs);
+            com.winlator.root.ChrootManager.mount(this, chrootBindRam, chrootBindAndroid);
         }
 
         GuestProgramLauncherComponent guestProgramLauncherComponent = new GuestProgramLauncherComponent();"""
@@ -688,7 +692,7 @@ if t2 in code:
 # Add ChrootComponent to environment
 t3 = 'environment = new XEnvironment(this, rootFS);'
 h3 = """environment = new XEnvironment(this, rootFS);
-        environment.addComponent(new com.winlator.root.ChrootComponent(chrootBindRam, chrootBindAndroid, chrootTmpfsDirs, chrootAndroidDirs));"""
+        environment.addComponent(new com.winlator.root.ChrootComponent(chrootBindRam, chrootBindAndroid));"""
 if t3 in code:
     code = code.replace(t3, h3, 1)
 
@@ -704,6 +708,35 @@ if t4 in code:
 with open(path, "w", encoding="utf-8") as f:
     f.write(code)
 print("hooked XServerDisplayActivity.java")
+PYTHON_SCRIPT
+    fi
+
+    if [ -f "$activity_file" ] && grep -q "chrootTmpfsDirs" "$activity_file"; then
+        python3 - <<'PYTHON_SCRIPT' "$activity_file"
+import sys
+
+path = sys.argv[1]
+with open(path, "r", encoding="utf-8") as f:
+    code = f.read()
+
+old_mount = "com.winlator.root.ChrootManager.mount(this, chrootBindRam, chrootBindAndroid, chrootTmpfsDirs, chrootAndroidDirs);"
+new_mount = "com.winlator.root.ChrootManager.mount(this, chrootBindRam, chrootBindAndroid);"
+if old_mount in code:
+    code = code.replace(old_mount, new_mount)
+
+old_comp = "com.winlator.root.ChrootComponent(chrootBindRam, chrootBindAndroid, chrootTmpfsDirs, chrootAndroidDirs)"
+new_comp = "com.winlator.root.ChrootComponent(chrootBindRam, chrootBindAndroid)"
+if old_comp in code:
+    code = code.replace(old_comp, new_comp)
+
+old_vars = """        final String chrootTmpfsDirs = container != null ? container.getExtra("chrootTmpfsDirs", "") : "";
+        final String chrootAndroidDirs = container != null ? container.getExtra("chrootAndroidDirs", "") : "";\n"""
+if old_vars in code:
+    code = code.replace(old_vars, "")
+
+with open(path, "w", encoding="utf-8") as f:
+    f.write(code)
+print("migrated XServerDisplayActivity.java chroot arguments")
 PYTHON_SCRIPT
     fi
 
